@@ -69,11 +69,11 @@ jobs:
   deploy:
     name: deploy-dev
     needs: build-and-push
-    # 未配置 SERVER_HOST 时整个 job 跳过（不会失败）
-    if: ${{ secrets.SERVER_HOST != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
+        # 未配置 SERVER_HOST 时这一步自动跳过（step 级 if 才能引用 secrets）
+        if: ${{ secrets.SERVER_HOST != '' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}

@@ -21,12 +21,20 @@ class OrganizationMember(Base):
     organization_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("organizations.id"), nullable=False
     )
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
-    role_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("roles.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id"), nullable=False
+    )
+    role_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("roles.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
 
     user: Mapped["User"] = relationship(back_populates="memberships")
-    organization: Mapped["Organization"] = relationship(back_populates="members", lazy="joined")
+    organization: Mapped["Organization"] = relationship(
+        back_populates="members", lazy="joined"
+    )
     role: Mapped["Role"] = relationship(lazy="joined")
 
     __table_args__ = (

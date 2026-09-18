@@ -49,7 +49,9 @@ class AuthService:
     async def login(self, data: LoginRequest) -> TokenResponse:
         """登录：校验账号密码，签发双 Token"""
         user = await self.user_repo.get_by_email(data.email)
-        if user is None or not security.verify_password(data.password, user.password_hash):
+        if user is None or not security.verify_password(
+            data.password, user.password_hash
+        ):
             raise InvalidCredentials()
         if user.status != "active":
             raise UserInactive()
@@ -95,7 +97,9 @@ class AuthService:
     async def _issue_tokens(self, user: User) -> TokenResponse:
         access_token = security.create_access_token(user.id, user.username)
         refresh_token, jti = security.create_refresh_token(user.id)
-        await redis_store.store_refresh_jti(jti, user.id, settings.refresh_token_expire_seconds)
+        await redis_store.store_refresh_jti(
+            jti, user.id, settings.refresh_token_expire_seconds
+        )
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,

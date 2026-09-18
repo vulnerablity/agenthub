@@ -26,7 +26,9 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)
+    ],
     db: DbSession,
 ) -> User:
     """解析 Bearer Access Token 并返回当前用户（校验签名/类型/有效期/账号状态）"""

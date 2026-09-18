@@ -4,7 +4,9 @@ GLOBAL_EMAIL = "alice@test.com"
 GLOBAL_PASSWORD = "secret123"
 
 
-async def _register(client, email=GLOBAL_EMAIL, username="alice", password=GLOBAL_PASSWORD):
+async def _register(
+    client, email=GLOBAL_EMAIL, username="alice", password=GLOBAL_PASSWORD
+):
     return await client.post(
         "/api/v1/auth/register",
         json={"email": email, "username": username, "password": password},
