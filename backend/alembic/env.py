@@ -14,8 +14,8 @@ from alembic import context
 # 确保无论从哪里运行（backend 目录或仓库根目录）都能导入 app 包
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.config import settings  # noqa: E402
-from app.models import Base  # noqa: E402
+from app.core.config import settings
+from app.models import Base
 
 config = context.config
 
