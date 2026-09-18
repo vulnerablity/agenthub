@@ -1,0 +1,13 @@
+# 构建上下文排除项：保持镜像干净、避免 .env 泄露
+
+.env
+.venv
+.idea
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+storage/
+*.log

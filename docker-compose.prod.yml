@@ -1,0 +1,76 @@
+# =========================================
+# AgentHub 生产编排（服务器部署用，CD 自动执行）
+# 服务器准备：
+#   1. 安装 Docker + Docker Compose
+#   2. 将本文件与 .env 放到 /opt/agenthub/
+#   3. docker compose -f docker-compose.prod.yml up -d
+# 镜像来自 GHCR（由 cd-dev.yml 推送），无需在服务器上构建
+# =========================================
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: agenthub-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-agenthub}
+      MYSQL_USER: ${MYSQL_USER:-agenthub}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: agenthub-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    # CD 推送后自动替换为最新 dev 镜像
+    image: ghcr.io/vulnerablity/agenthub/backend:dev
+    container_name: agenthub-backend
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      API_V1_PREFIX: /api/v1
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?请在 .env 中设置 JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-agenthub}
+      MYSQL_USER: ${MYSQL_USER:-agenthub}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
+      DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-agenthub}:${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-agenthub}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/vulnerablity/agenthub/frontend:dev
+    container_name: agenthub-frontend
+    restart: unless-stopped
+    ports:
+      # 对外入口（如使用域名/HTTPS，交由反向代理或云厂商负载均衡转发 80 端口）
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
