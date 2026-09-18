@@ -91,7 +91,9 @@ async def test_refresh_issues_new_tokens(client):
     )
     assert resp.status_code == 200
     new_tokens = resp.json()
-    assert new_tokens["access_token"] != tokens["access_token"]
+    # refresh token 每次带新的 jti（uuid），必然不同；
+    # access token 同秒内签发字符串相同（无随机 jti），不比字符串
+    assert new_tokens["refresh_token"] != tokens["refresh_token"]
 
     # 换发后旧 refresh token 应作废；本机未启动 Redis 时降级为放行，故两种状态均可
     again = await client.post(
