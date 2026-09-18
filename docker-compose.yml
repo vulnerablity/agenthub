@@ -1,0 +1,80 @@
+# =========================================
+# AgentHub 本地开发编排（docker compose up -d）
+# 首次使用：复制 .env.example 为 .env，修改数据库/Redis/JWT 密码
+#   copy .env.example .env
+# =========================================
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: agenthub-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-agenthub}
+      MYSQL_USER: ${MYSQL_USER:-agenthub}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+    ports:
+      # 若本机 3306 已被本地 MySQL 占用，删除此行或改宿主机端口（如 "13306:3306"）
+      - "13306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: agenthub-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    container_name: agenthub-backend
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      API_V1_PREFIX: /api/v1
+      # 生产/部署请务必在 .env 中设置强随机密钥（至少 32 字节）
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-to-a-random-secret-at-least-32-bytes}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-agenthub}
+      MYSQL_USER: ${MYSQL_USER:-agenthub}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-agenthub}:${MYSQL_PASSWORD:-change-me}@mysql:3306/${MYSQL_DATABASE:-agenthub}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: agenthub-frontend
+    ports:
+      # 前端入口：浏览器访问 http://localhost
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
