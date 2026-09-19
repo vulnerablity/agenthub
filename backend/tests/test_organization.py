@@ -48,7 +48,9 @@ async def test_create_org_and_lists(client):
     assert lst.json()[0]["role"] == "owner"
 
     # 组织详情
-    detail = await client.get(f"/api/v1/organizations/{org['id']}", headers=_auth(token))
+    detail = await client.get(
+        f"/api/v1/organizations/{org['id']}", headers=_auth(token)
+    )
     assert detail.status_code == 200
     assert detail.json()["my_role"] == "owner"
 
@@ -72,7 +74,9 @@ async def test_create_org_validation(client):
 
 async def test_org_requires_auth(client):
     assert (await client.get("/api/v1/organizations")).status_code == 401
-    assert (await client.post("/api/v1/organizations", json={"name": "x"})).status_code == 401
+    assert (
+        await client.post("/api/v1/organizations", json={"name": "x"})
+    ).status_code == 401
 
 
 async def test_org_not_found(client):
@@ -89,7 +93,9 @@ async def test_non_member_forbidden(client):
     alice_token = await _token(client, "alice@test.com")
     bob_token = await _token(client, "bob@test.com")
     org = (await _create_org(client, bob_token)).json()
-    resp = await client.get(f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token))
+    resp = await client.get(
+        f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token)
+    )
     assert resp.status_code == 403
     assert resp.json()["code"] == "NOT_ORG_MEMBER"
 
@@ -396,7 +402,9 @@ async def test_transfer_ownership(client):
     assert detail["my_role"] == "owner"
     assert detail["owner_username"] == "bob"
     alice_detail = (
-        await client.get(f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token))
+        await client.get(
+            f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token)
+        )
     ).json()
     assert alice_detail["my_role"] == "admin"
 
@@ -494,7 +502,9 @@ async def test_remove_member(client):
     )
     assert resp.status_code == 204
     members = (
-        await client.get(f"/api/v1/organizations/{org['id']}/members", headers=_auth(token))
+        await client.get(
+            f"/api/v1/organizations/{org['id']}/members", headers=_auth(token)
+        )
     ).json()
     assert len(members) == 1
 
@@ -562,7 +572,9 @@ async def test_leave_org(client):
     assert resp.status_code == 204
 
     # 退出后不再是成员
-    resp = await client.get(f"/api/v1/organizations/{org['id']}", headers=_auth(bob_token))
+    resp = await client.get(
+        f"/api/v1/organizations/{org['id']}", headers=_auth(bob_token)
+    )
     assert resp.status_code == 403
     assert resp.json()["code"] == "NOT_ORG_MEMBER"
 
@@ -602,7 +614,9 @@ async def test_dissolve(client):
     )
     assert resp.status_code == 204
     assert (
-        await client.get(f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token))
+        await client.get(
+            f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token)
+        )
     ).status_code == 404
 
     # 双方组织列表均空

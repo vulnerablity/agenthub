@@ -46,7 +46,9 @@ class OrganizationService:
         owner_role = await self._get_role("owner")
         org = await self.org_repo.create(Organization(name=data.name, owner_id=user.id))
         await self.org_repo.add_member(
-            OrganizationMember(organization_id=org.id, user_id=user.id, role_id=owner_role.id)
+            OrganizationMember(
+                organization_id=org.id, user_id=user.id, role_id=owner_role.id
+            )
         )
         # refresh 取回 server_default 的 created_at（MySQL 无 RETURNING）
         await self.db.refresh(org)
@@ -120,7 +122,9 @@ class OrganizationService:
             raise AlreadyMember()
         role = await self._get_role(data.role)
         membership = await self.org_repo.add_member(
-            OrganizationMember(organization_id=org.id, user_id=target.id, role_id=role.id)
+            OrganizationMember(
+                organization_id=org.id, user_id=target.id, role_id=role.id
+            )
         )
         try:
             # refresh 取回 server_default 的 created_at；commit 兜底唯一约束冲突

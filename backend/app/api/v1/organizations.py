@@ -79,7 +79,9 @@ async def list_members(
 
 
 @router.post("/{org_id}/members", response_model=MemberResponse, status_code=201)
-async def add_member(data: MemberAddRequest, ctx: AdminCtx, db: DbSession) -> MemberResponse:
+async def add_member(
+    data: MemberAddRequest, ctx: AdminCtx, db: DbSession
+) -> MemberResponse:
     org, membership = ctx
     return await OrganizationService(db).add_member(org, membership, data)
 

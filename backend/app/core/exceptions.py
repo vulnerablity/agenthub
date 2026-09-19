@@ -75,7 +75,9 @@ class OwnerRequired(AppError):
 
 class OwnerCannotLeave(AppError):
     def __init__(self) -> None:
-        super().__init__(403, "OWNER_CANNOT_LEAVE", "组织拥有者不能退出组织，请先转让或解散")
+        super().__init__(
+            403, "OWNER_CANNOT_LEAVE", "组织拥有者不能退出组织，请先转让或解散"
+        )
 
 
 class OwnerCannotBeRemoved(AppError):
