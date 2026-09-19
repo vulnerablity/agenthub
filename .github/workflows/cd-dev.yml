@@ -3,12 +3,14 @@
 #   1. 构建 backend / frontend 镜像并推送 GHCR（ghcr.io/vulnerablity/agenthub/...）
 #   2. 若已配置服务器 Secrets，则 SSH 到服务器拉取镜像并重启
 #
-# 服务器就绪前：什么都不用做，deploy job 会自动跳过（条件见下）
+# 服务器就绪前：deploy job 自动跳过（ENABLE_DEV_DEPLOY 变量未设）
 # 服务器就绪后：在 GitHub 仓库 Settings -> Secrets and variables -> Actions 配置：
-#   SERVER_HOST    服务器 IP 或域名
-#   SERVER_USERNAME SSH 用户名（如 root）
-#   SERVER_SSH_KEY SSH 私钥（先在服务器添加对应公钥）
-#   SERVER_PORT    SSH 端口（默认 22，可不配）
+#   Variables 页签：ENABLE_DEV_DEPLOY = true  （开关）
+#   Secrets 页签：
+#     SERVER_HOST    服务器 IP 或域名
+#     SERVER_USERNAME SSH 用户名（如 root）
+#     SERVER_SSH_KEY SSH 私钥（先在服务器添加对应公钥）
+#     SERVER_PORT    SSH 端口（默认 22，可不配）
 #   服务器上需准备 /opt/agenthub/：docker-compose.prod.yml + .env
 # =========================================
 
@@ -70,10 +72,12 @@ jobs:
     name: deploy-dev
     needs: build-and-push
     runs-on: ubuntu-latest
+    # 仅当仓库变量 ENABLE_DEV_DEPLOY=true 时才部署；
+    # 服务器就绪前不设此变量，整个 deploy job 自动跳过
+    # （if 表达式不能引用 secrets，只能用 vars）
+    if: ${{ vars.ENABLE_DEV_DEPLOY == 'true' }}
     steps:
       - name: Deploy via SSH
-        # 未配置 SERVER_HOST 时这一步自动跳过（step 级 if 才能引用 secrets）
-        if: ${{ secrets.SERVER_HOST != '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
