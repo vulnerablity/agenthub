@@ -2,3 +2,4 @@
 // 类型层统一出口
 export * from './auth'
 export * from './http'
+export * from './organization'

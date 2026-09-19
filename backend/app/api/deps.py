@@ -3,15 +3,22 @@
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Path
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import security
-from app.core.exceptions import Forbidden, TokenInvalid, UserInactive, UserNotFound
+from app.core.exceptions import (
+    Forbidden,
+    NotOrgMember,
+    OrganizationNotFound,
+    TokenInvalid,
+    UserInactive,
+    UserNotFound,
+)
 from app.db.session import async_session_factory
-from app.models import OrganizationMember, Role, User
+from app.models import Organization, OrganizationMember, Role, User
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -63,3 +70,35 @@ def require_role(*allowed_roles: str):
         return user
 
     return role_checker
+
+
+def require_org_role(*allowed_roles: str):
+    """组织作用域角色校验：组织存在、当前用户为该组织成员且角色命中。
+
+    返回 (org, membership) 供 handler 复用，service 层不再重复查询成员关系。
+    org_id 由 FastAPI 从路径注入（handler 不再重复声明）。
+    """
+
+    async def checker(
+        org_id: Annotated[int, Path(description="组织 ID")],
+        user: CurrentUser,
+        db: DbSession,
+    ) -> tuple[Organization, OrganizationMember]:
+        org = await db.get(Organization, org_id)
+        if org is None:
+            raise OrganizationNotFound()
+        result = await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == org_id,
+                OrganizationMember.user_id == user.id,
+            )
+        )
+        membership = result.scalar_one_or_none()
+        if membership is None:
+            raise NotOrgMember()
+        # role 为 lazy="joined"，随 membership 查询一并加载
+        if membership.role.name not in allowed_roles:
+            raise Forbidden()
+        return org, membership
+
+    return checker
