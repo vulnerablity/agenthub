@@ -31,7 +31,7 @@ export default function Home() {
                   {currentOrg.name}
                 </h4>
                 <p className="mt-1 text-xs text-neutral-500">
-                  拥有者 {currentOrg.owner_username} · {currentOrg.member_count} 名成员
+                  企业拥有者 {currentOrg.owner_username} · {currentOrg.member_count} 名成员
                 </p>
               </div>
               <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
