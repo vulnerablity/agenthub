@@ -1,50 +1,52 @@
 # Agent 智能体管理模块设计文档
 
 > 本文档描述 Agent 智能体管理模块的**当前实际实现**，以代码为准，供后期维护与迭代参考。体例沿用《Auth 模块设计文档》（`docs/模块设计文档/auth.md`）与《Organization 组织管理模块设计文档》（`docs/模块设计文档/organization.md`）。
-> 范围：组织作用域内智能体的创建 / 列表 / 详情 / 编辑 / 启停 / 删除（6 个后端接口 + 前端列表、表单、详情三个页面）。用户认证与组织 RBAC 见 auth.md / organization.md。所有文件引用均为相对路径。
+> 需求依据：`docs/需求文档 V1.0.md` 第 3.3（Agent 管理）、3.4（Agent Version）、4.4/4.5（数据表）及第 7 节 V1 开发范围。所有文件引用均为相对路径。
 
 ## 1. 模块概述
 
 功能清单：
 
-- 智能体：创建、列表（名称模糊过滤 + 状态过滤）、详情、编辑、启停、删除，全部挂在组织下（组织作用域数据隔离）
-- 配置项：名称、描述、系统提示词（System Prompt）、LLM Provider、模型名、Temperature、Max Tokens、启用状态
-
-需求来源：README Roadmap V1「Agent Management」+「Create an Agent」核心流程（Configure: System Prompt / LLM Provider / Model / Temperature / Max Tokens / Knowledge Bases / Tools）。
+- 智能体：创建（含初始配置，自动生成 v1 并发布）、列表（名称模糊 + 状态过滤，展示名称/当前版本/状态/创建时间）、详情、编辑基础信息（名称/描述/头像）、启停、删除（版本级联删除）
+- 版本：版本列表、创建版本（不自动发布）、发布版本、回滚版本（需求 3.4）
 
 产品决策（基线，改动需同步本文档）：
 
 | # | 决策 | 说明 |
 | --- | --- | --- |
-| D1 | 名称组织内唯一（1–100 字符），不做全局唯一 | `uq_agent_name(organization_id, name)` 保证，多组织可同名 |
-| D2 | V1 **不绑定知识库 / 工具** | 对应模块尚未实现；后续接入时新增关联表并走新迁移，不改已执行迁移 |
-| D3 | provider / model 为自由文本（仅长度校验），V1 不做 LLM 连通性测试 | 模型网关接入与连通性验证由聊天模块统一约束 |
-| D4 | 启停即时生效、不删除配置 | `status ∈ {enabled, disabled}`；disabled 仅影响后续对话运行（chat 模块校验），本模块只管理状态 |
-| D5 | 删除为硬删除（V1 无关联数据） | chat / 执行日志模块落地后重新评估级联与软删 |
-| D6 | 列表 V1 全量返回 + `name` 模糊 + `status` 过滤，不分页 | 与 organization.md D6 一致，数据量可控后平滑加分页 |
-| D7 | 权限以组织角色为准：owner/admin 可管理，member/viewer 只读 | `created_by` 仅记录创建者，不参与权限判定 |
-| D8 | 组织解散须同事务先删该组织全部 agents（FK 顺序） | 需小幅调整 organization 模块的 `dissolve`（见 2.4） |
+| D1 | 名称组织内唯一（1–100 字符），不做全局唯一 | `uq_agent_name(organization_id, name)` 保证；需求未约束，属实现细节 |
+| D2 | 模型配置与提示词**版本化存储**（需求 4.5 agent_versions） | agents 表仅存基础信息 + `current_version_id`（需求 4.4）；创建即产生 v1 并发布 |
+| D3 | 编辑语义拆分：PATCH 仅改基础信息；模型/Prompt 变更走「新建版本 → 发布」 | 对应需求 3.3「编辑支持修改描述/模型/Prompt」+ 3.4 版本化 |
+| D4 | provider / model 为自由文本（仅长度校验），V1 不做 LLM 连通性测试 | 需求未枚举 provider；网关接入由聊天模块统一约束 |
+| D5 | 启停即时生效、不删除配置：`status ∈ {enabled, disabled}` | 需求 3.3 创建字段含「状态」；创建可指定，默认 enabled |
+| D6 | 删除为硬删除，版本随外键 `ON DELETE CASCADE` 级联清理 | 需求未定义级联；chat/日志模块落地后复审 |
+| D7 | 列表 V1 全量 + `name` 模糊 + `status` 过滤，不分页 | 需求 3.3 列表仅定义展示字段，未要求分页 |
+| D8 | 权限以组织角色为准：owner/admin 可管理，member/viewer 只读 | 对应需求 2.x 角色矩阵；member「使用对话」属聊天模块 |
+| D9 | 组织隔离经请求头 `X-Organization-Id` | 需求 API 为顶层路径 `/api/v1/agents` 无组织维度；决策：路径按需求、隔离走请求头 |
+| D10 | 组织解散须同事务先删该组织全部 agents（版本随 CASCADE） | 需确保 organization 模块 dissolve 的外键顺序 |
 
 前后端对应关系：
 
-| 功能 | 后端接口 | 前端实现 |
+| 功能 | 后端接口（需求 3.3/3.4） | 前端实现 |
 | --- | --- | --- |
-| 创建 | `POST /api/v1/organizations/{org_id}/agents` | `pages/agents/Form.tsx`（新建态） |
-| 列表 | `GET /api/v1/organizations/{org_id}/agents` `?name=&status=` | `hooks/useAgents.ts` → `pages/agents/List.tsx` |
-| 详情 | `GET /api/v1/organizations/{org_id}/agents/{agent_id}` | `hooks/useAgent.ts` → `pages/agents/Detail.tsx` |
-| 编辑 | `PATCH /api/v1/organizations/{org_id}/agents/{agent_id}` | `pages/agents/Form.tsx`（编辑态）+ Detail 入口 |
-| 启停 | `PATCH /api/v1/organizations/{org_id}/agents/{agent_id}/status` | List 卡片开关 / Detail 页头按钮 |
-| 删除 | `DELETE /api/v1/organizations/{org_id}/agents/{agent_id}` | `pages/agents/Detail.tsx`（危险区） |
+| 创建 | `POST /api/v1/agents` | `pages/agents/Form.tsx`（新建态） |
+| 列表 | `GET /api/v1/agents` `?name=&status=` | `hooks/useAgents.ts` → `pages/agents/List.tsx` |
+| 详情 | `GET /api/v1/agents/{agent_id}` | `hooks/useAgent.ts` → `pages/agents/Detail.tsx` |
+| 编辑基础信息 | `PATCH /api/v1/agents/{agent_id}` | `pages/agents/Form.tsx`（编辑态） |
+| 启停 | `PATCH /api/v1/agents/{agent_id}/status` | List 卡片开关 / Detail 页头按钮 |
+| 删除 | `DELETE /api/v1/agents/{agent_id}` | `pages/agents/Detail.tsx`（危险区） |
+| 版本列表 | `GET /api/v1/agents/{agent_id}/versions` | Detail 版本历史区 |
+| 创建版本 | `POST /api/v1/agents/{agent_id}/versions` | `pages/agents/VersionForm.tsx` |
+| 发布 | `POST /api/v1/agents/{agent_id}/versions/{version_id}/publish` | Detail 版本历史「发布」 |
+| 回滚 | `POST /api/v1/agents/{agent_id}/versions/{version_id}/rollback` | Detail 版本历史「回滚」 |
 
 权限矩阵（组织内，后端为准、前端按角色隐藏入口）：
 
 | 操作 | owner | admin | member | viewer |
 | --- | --- | --- | --- | --- |
-| 查看列表 / 详情 | ✔ | ✔ | ✔ | ✔ |
-| 创建 | ✔ | ✔ | — | — |
-| 编辑 | ✔ | ✔ | — | — |
-| 启停 | ✔ | ✔ | — | — |
-| 删除 | ✔ | ✔ | — | — |
+| 查看列表 / 详情 / 版本 | ✔ | ✔ | ✔ | ✔ |
+| 创建 / 编辑 / 启停 / 删除 | ✔ | ✔ | — | — |
+| 创建版本 / 发布 / 回滚 | ✔ | ✔ | — | — |
 
 ## 2. 后端实现
 
@@ -54,224 +56,229 @@
 
 ```
 backend/
-├─ alembic/versions/20260919_0002_create_agents_table.py   # 迁移：agents 表
+├─ alembic/versions/20260919_0002_create_agents_table.py   # 早前基线（已被 0003 重构）
+├─ alembic/versions/20260920_0003_agent_versioning.py      # 重构 agents（对齐 4.4）+ 新建 agent_versions（4.5）
 ├─ app/
-│  ├─ api/v1/agents.py            # 6 个端点（prefix=/organizations/{org_id}/agents）
-│  ├─ api/v1/router.py            # 追加挂载 agents.router
-│  ├─ core/exceptions.py          # 追加 AgentNotFound / AgentNameConflict / AgentFieldRequired
-│  ├─ models/agent.py             # Agent 模型
-│  ├─ models/__init__.py          # 追加导出 Agent
-│  ├─ schemas/agent.py            # 请求/响应模型（含 AgentStatus）
-│  ├─ repositories/agent_repo.py  # agents 数据访问（含 delete_by_org 供解散联动）
-│  ├─ services/agent_service.py   # 业务逻辑与归属校验
-│  ├─ services/organization_service.py  # dissolve 先删 agents（D8）
-└─ tests/test_agent.py            # 12 个集成用例；conftest 清理链追加 Agent
+│  ├─ api/deps.py                  # 追加 require_header_org_role（X-Organization-Id 组织校验）
+│  ├─ api/v1/agents.py             # 10 个端点（顶层 prefix=/agents）
+│  ├─ api/v1/router.py             # 挂载 agents.router
+│  ├─ core/exceptions.py           # 追加 AgentNotFound / AgentNameConflict / AgentFieldRequired / AgentVersionNotFound
+│  ├─ models/agent.py              # Agent（对齐需求 4.4）
+│  ├─ models/agent_version.py      # AgentVersion（对齐需求 4.5）
+│  ├─ models/__init__.py           # 追加导出 Agent / AgentVersion
+│  ├─ schemas/agent.py             # 请求/响应模型（CRUD + 版本）
+│  ├─ repositories/agent_repo.py   # agents / agent_versions 数据访问
+│  ├─ services/agent_service.py    # 业务逻辑与归属校验
+│  ├─ services/organization_service.py  # dissolve 先删 agents（D10）
+└─ tests/test_agent.py             # 14 个集成用例；conftest 清理链追加 AgentVersion
 ```
 
-分层链路与 auth / organization 模块一致：`router → AgentService → AgentRepository → SQLAlchemy`。路由层不写业务与 SQL；权限复用 `require_org_role` 的组织作用域别名，service 层**只补智能体的归属校验**（`agent.organization_id == org.id`），不再重复查询成员关系。
+分层链路与 auth / organization 模块一致：`router → AgentService → AgentRepository → SQLAlchemy`。权限复用 `require_header_org_role` 的组织作用域别名，service 层只补智能体与版本的归属校验，不再重复查询成员关系。
 
-### 2.2 数据模型（新迁移 20260919_0002）
+### 2.2 数据模型
 
-`agents` 表（命名与字段风格沿用 `users` / `organizations`）：
+`agents`（对齐需求 4.4；迁移 `20260920_0003` 收口）：
 
 | 字段 | 类型 | 约束 | 说明 |
 | --- | --- | --- | --- |
 | `id` | BigInteger | PK, autoincrement | — |
 | `organization_id` | BigInteger | FK→`organizations.id`, not null | 索引 `ix_agents_organization_id` |
 | `name` | VARCHAR(100) | not null | 组织内唯一（D1） |
-| `description` | VARCHAR(500) | nullable | — |
-| `system_prompt` | TEXT | not null, server_default `''` | 系统提示词 |
-| `provider` | VARCHAR(50) | not null | LLM Provider（自由文本，D3） |
-| `model` | VARCHAR(100) | not null | 模型名（自由文本，D3） |
-| `temperature` | DECIMAL(3,2) | nullable | 0.00–2.00；null 表示取运行时默认 |
-| `max_tokens` | Integer | nullable | 1–100000；null 表示取运行时默认 |
+| `description` | TEXT | nullable | 需求 4.4 为 TEXT |
+| `avatar_url` | VARCHAR(500) | nullable | 需求 4.4 头像 |
 | `status` | VARCHAR(20) | not null, server_default `'enabled'` | `enabled` / `disabled` |
-| `created_by` | BigInteger | FK→`users.id`, not null | 仅记录，不参与权限（D7） |
+| `current_version_id` | BigInteger | FK→`agent_versions.id`, nullable, `ondelete=SET NULL` | 当前发布版本（需求 4.4） |
+| `created_by` | BigInteger | FK→`users.id`, not null | 仅记录（D8） |
 | `created_at` / `updated_at` | DateTime | server_default / onupdate 同现有表 | — |
 
-- 唯一约束：`uq_agent_name(organization_id, name)`
-- ORM 关系：V1 不建立与 users / organizations 的 relationship（查询只需 `organization_id` 过滤），避免不必要的加载开销；如详情页需显示创建者用户名，查询时显式 `selectinload` 或子查询取用户名
+`agent_versions`（对齐需求 4.5）：
 
-### 2.3 接口明细
+| 字段 | 类型 | 约束 | 说明 |
+| --- | --- | --- | --- |
+| `id` | BigInteger | PK, autoincrement | — |
+| `agent_id` | BigInteger | FK→`agents.id`, not null, `ondelete=CASCADE` | agent 删除时版本级联清理（D6） |
+| `version` | Integer | not null | 序号，从 1 起递增；`uq_agent_version_seq(agent_id, version)` |
+| `system_prompt` | TEXT | not null | 需求 4.5 |
+| `model_provider` | VARCHAR(50) | not null | 需求 4.5 |
+| `model_name` | VARCHAR(100) | not null | 需求 4.5 |
+| `temperature` | FLOAT | nullable | 需求 4.5；null = 运行时默认 |
+| `max_tokens` | Integer | nullable | null = 运行时默认 |
+| `config_json` | JSON | nullable | 扩展参数字典 |
+| `created_by` | BigInteger | FK→`users.id`, not null | — |
+| `created_at` | DateTime | server_default | — |
+
+- **环形外键**：`agents.current_version_id → agent_versions.id` 与 `agent_versions.agent_id → agents.id` 互指，前者用 `use_alter=True` 延迟建约束后随迁移 `op.create_foreign_key` 落库；两模型**不建 relationship**（避免懒加载与加载冲突）
+- **system_prompt 无 DB 默认值**：TEXT 列在 MySQL 不支持字面量 server_default，非空由 schema 默认 `""` 与应用层保证
+
+### 2.3 依赖注入：require_header_org_role
+
+`api/deps.py` 的 `require_header_org_role(*allowed_roles)` 是顶层资源组织隔离的唯一入口（与 `require_org_role` 判权逻辑一致，仅组织来源不同）：
+
+```
+X-Organization-Id 头缺失 / 非数字 → 403 FORBIDDEN（不泄露组织存在性）
+  → db.get(Organization) 为空 → 404 ORGANIZATION_NOT_FOUND
+  → 查 membership(org.id, user.id) 为空 → 403 NOT_ORG_MEMBER
+  → membership.role.name 不命中 → 403 FORBIDDEN
+  → 返回 (org, membership)
+```
+
+路由层定义 `OrgCtx`（owner/admin/member/viewer）与 `AdminCtx`（owner/admin）两个别名，10 个端点全部挂在这两个别名上；智能体归属（`agent.organization_id == org.id`）与版本归属（`version.agent_id == agent.id`）由 service 层校验。
+
+### 2.4 接口明细
 
 | 接口 | 成功 | 权限（依赖别名） | 关键实现点 |
 | --- | --- | --- | --- |
-| `POST /organizations/{org_id}/agents` `{name, description?, provider, model, temperature?, max_tokens?, system_prompt?}` | 201 `AgentDetail` | AdminCtx | 名称冲突预查 409 + `IntegrityError` 兜底；`db.refresh` 取回 created_at |
-| `GET /organizations/{org_id}/agents` `?name=&status=` | 200 `AgentListItem[]` | OrgCtx | 组织内过滤；name 模糊 + status 精确（`Literal` 经 Query 校验）；V1 不分页 |
-| `GET /organizations/{org_id}/agents/{agent_id}` | 200 `AgentDetail` | OrgCtx | 归属校验：非本组织 agent 一律 404 `AGENT_NOT_FOUND`（不泄露存在性） |
-| `PATCH /organizations/{org_id}/agents/{agent_id}` `{同上全可选}` | 200 `AgentDetail` | AdminCtx | 全字段可选（`model_config` 或手工判定 `exclude_unset`）；改名冲突规则同创建 |
-| `PATCH /organizations/{org_id}/agents/{agent_id}/status` `{status}` | 200 `AgentDetail` | AdminCtx | `status: Literal["enabled","disabled"]`；独立端点避免编辑接口旁路 |
-| `DELETE /organizations/{org_id}/agents/{agent_id}` | 204 | AdminCtx | 硬删除（D5）；归属校验同详情 |
+| `POST /agents` `{name, description?, avatar_url?, status?, system_prompt?, model_provider, model_name, temperature?, max_tokens?, config_json?}` | 201 `AgentDetail` | AdminCtx | 事务：建 agent + 建 v1 + 指向 current_version_id；见 2.5 |
+| `GET /agents` `?name=&status=` | 200 `AgentListItem[]` | OrgCtx | 批量映射 current_version_id → 版本号；V1 不分页 |
+| `GET /agents/{agent_id}` | 200 `AgentDetail` | OrgCtx | 含当前版本完整配置 `current_version_detail` |
+| `PATCH /agents/{agent_id}` `{name?, description?, avatar_url?}` | 200 `AgentDetail` | AdminCtx | 仅基础信息（D3）；可空字段 null 清空；name null → 422 |
+| `PATCH /agents/{agent_id}/status` `{status}` | 200 `AgentDetail` | AdminCtx | `Literal["enabled","disabled"]`；独立端点保持职责单一 |
+| `DELETE /agents/{agent_id}` | 204 | AdminCtx | 删 agent，版本随 DB 级联删除 |
+| `GET /agents/{agent_id}/versions` | 200 `AgentVersionItem[]` | OrgCtx | 按 version 倒序 |
+| `POST /agents/{agent_id}/versions` `{system_prompt, model_provider, model_name, temperature?, max_tokens?, config_json?}` | 201 `AgentVersionItem` | AdminCtx | 序号 = max(version)+1；不自动发布 |
+| `POST /agents/{agent_id}/versions/{version_id}/publish` | 200 `AgentDetail` | AdminCtx | 设 current_version_id 为目标版本 |
+| `POST /agents/{agent_id}/versions/{version_id}/rollback` | 200 `AgentDetail` | AdminCtx | 与 publish 同机制（指回历史版本） |
 
-> 复用 organization.md 的依赖别名约定：`OrgCtx`（owner/admin/member/viewer）、`AdminCtx`（owner/admin）。本模块所有端点挂在 `{org_id}` 路径下，`require_org_role` 自动完成组织存在 / 成员身份 / 角色三重校验，service 层不得再查 membership。
+### 2.5 服务层关键实现（维护时勿破坏）
 
-### 2.4 服务层关键设计（实施时勿破坏）
+- **归属校验是数据隔离的第二道闸**：按 `agent_id` 操作必须校验 `agent.organization_id == org.id`（404 `AGENT_NOT_FOUND`）；按 `version_id` 操作必须校验 `version.agent_id == agent.id`（404 `AGENT_VERSION_NOT_FOUND`）
+- **创建事务（agent + v1 + 指向）**：建 agent → flush → 建 v1 → flush → `agent.current_version_id = version.id` → **显式 `db.flush()`** 落库 UPDATE（`refresh()` 不保证触发 autoflush，曾实测丢失赋值）→ refresh 两个对象取回 server_default → commit；`IntegrityError` 兜底名称/序号并发冲突
+- **onupdate 取回**：`updated_at` 带 `onupdate=func.now()`，任何 UPDATE（编辑/启停/发布/回滚）提交后必须 `db.refresh(agent)`，否则过期属性在 async 上下文懒加载抛 `MissingGreenlet`
+- **名称唯一（D1）**：创建与改名前预查 + `IntegrityError` 兜底（并发）
+- **局部更新**：PATCH 用 `exclude_unset`；description / avatar_url 传 null 表示清空，name 传 null → 422 `AGENT_FIELD_REQUIRED`
+- **版本序号**：`next_version_number = max(version) + 1`，`uq_agent_version_seq` 兜底并发生成
+- **发布 / 回滚共用 `_set_current`**：校验版本归属 → 赋值 `agent.current_version_id` → commit → refresh
+- **组织解散联动（D10）**：`OrganizationService.dissolve` 先 `agent_repo.delete_by_org(org.id)`（versions 随 CASCADE），再删成员关系、再删组织
 
-- **归属校验是数据隔离的第二道闸**：所有按 `agent_id` 操作的接口在 `db.get(Agent, agent_id)` 后必须校验 `agent.organization_id == org.id`，否则返回 404 `AGENT_NOT_FOUND`（用 404 而非 403，不对外暴露其他组织的 agent 是否存在）
-- **名称唯一（D1）**：创建与改名（含改名到同名）前预查 `uq_agent_name` → 409 `AGENT_NAME_CONFLICT`；并发下由唯一约束抛 `IntegrityError` 兜底（模式同 organization.md 的添加成员）
-- **server_default / onupdate 取回**：MySQL 无 RETURNING。创建后必须 `db.refresh(agent)` 拿回 `created_at` / `status`；**更新 / 启停提交后同样必须 `db.refresh(agent)`**——`updated_at` 带 `onupdate=func.now()`，UPDATE 后该属性过期，async 上下文中的懒加载会抛 `MissingGreenlet`（曾实测复现的 bug，与 organization.md 记录的关系懒加载同源）
-- **system_prompt 无 DB 默认值**：TEXT 列在 MySQL 不支持字面量 server_default，故建表时无默认值；由 schema 默认 `""` 与应用层保证非空，更新时传 null 的清空语义为回退空串
-- **组织解散联动（D8）**：`OrganizationService.dissolve` 同事务内先 `agent_repo.delete_by_org(org.id)`，再删成员关系、再删组织（FK 顺序），否则外键约束会阻止解散
-- **PATCH 局部更新**：`AgentUpdateRequest` 全字段可选，用 `exclude_unset` 判定后进行字段赋值；可空字段（description/temperature/max_tokens/system_prompt）传 null 表示清空，必填字段（name/provider/model）传 null → 422 `AGENT_FIELD_REQUIRED`
-- 创建 / 编辑 / 删除均为单事务（沿用 `session.commit()` 模式），不做部分提交
+### 2.6 测试体系
 
-### 2.5 测试体系
+- 位置：`backend/tests/test_agent.py`，沿用 conftest 模式；清理链按外键顺序：版本 → 智能体 → 成员 → 组织 → 用户
+- 14 个用例覆盖：创建（含 v1 自动发布、字段校验 422、非法 status 422）、名称冲突（创建 + 改名撞名 + 改自身原名）、列表过滤（name/status/非法 status 422）、未登录 401、请求头隔离（缺头 403 / 非数字 403 / 组织不存在 404 / 非成员 403）、跨组织 agent 404、viewer 只读（读 200 + 六类管理操作 403）、编辑基础信息（null 清空 / name null 422）、启停流转、删除（204 + 版本级联清空）、版本流转（建 v2 不发布 / 发布 / 回滚 / 版本不存在 404 / 跨 agent 版本 404）、组织解散级联删 agents 与 versions
+- 全量回归：`pytest`（当前 53 passed，含 auth 16 例 + organization 23 例 + agent 14 例）
 
-- 位置：`backend/tests/test_agent.py`，沿用 conftest 模式（测试库自动建库迁移、`dependency_overrides`、每用例清空业务表；清理链已追加先删 Agent，满足外键顺序）
-- 12 个用例覆盖：创建与校验（422：名称长度 / temperature 越界 / max_tokens 越界 / 缺 provider）、名称冲突（创建 409 + 改名撞名 409 + 改名为自身原名 200）、列表过滤（name 模糊 / status 过滤 / 非法 status 422）、未登录 401、非成员 403（NOT_ORG_MEMBER）、viewer 只读（读 200 + 四类管理操作 403）、归属隔离（不存在 404 + 跨组织 agent_id 404 `AGENT_NOT_FOUND`）、局部编辑（只改已传字段 + 可空字段置 null 清空 + system_prompt null 回退空串 + 必填 null 422 `AGENT_FIELD_REQUIRED` + 空请求体不变）、启停流转与非法值 422、删除后查无 404、组织解散级联删除 agents（D8，直接查库断言）
-- 全量回归：`pytest`（当前 51 passed，含 auth 16 例 + organization 23 例 + agent 12 例）
-
-## 3. 前端实现与页面布局
+## 3. 前端实现
 
 ### 3.1 目录结构与依赖方向
 
 ```
 frontend/src/
-├─ api/agents.ts                     # agentApi（api/index.ts 追加导出）
-├─ types/agent.ts                    # AgentStatus / 各请求响应类型（index.ts 追加导出）
-├─ constants/routes.ts               # 追加 ROUTE_PATHS 与 agentsPath / agentDetailPath / agentEditPath 工具
-├─ constants/agent-options.ts        # PROVIDER 常用选项 + 状态中文文案（复用 org-roles.ts 的文案常量模式）
-├─ hooks/useAgents.ts                # queryKey ['org', orgId, 'agents', {name, status}]
-├─ hooks/useAgent.ts                 # queryKey ['org', orgId, 'agent', agentId]
-├─ components/layout/AppLayout.tsx   # 修改：侧边栏追加「智能体管理」导航
-└─ pages/agents/{List,Form,Detail}.tsx
+├─ api/agents.ts                     # agentApi（顶层 /agents，不含 orgId 路径参数）
+├─ types/agent.ts                    # AgentStatus / CRUD / 版本请求响应类型
+├─ constants/routes.ts               # 追加 AGENTS / AGENT_NEW / AGENT_DETAIL / AGENT_EDIT / AGENT_VERSION_NEW 与路径工具
+├─ constants/agent-options.ts        # 状态中文文案 + PROVIDER 候选项 + canManageAgent
+├─ hooks/useAgents.ts                # queryKey ['org', orgId, 'agents', name, status]
+├─ hooks/useAgent.ts                 # useAgent + useAgentVersions（['org', orgId, 'agent', agentId, 'versions']）
+├─ utils/http.ts                     # 请求拦截器注入 X-Organization-Id（setOrgIdProvider 由 main.tsx 装配）
+├─ pages/agents/{List,Form,Detail,VersionForm}.tsx
+└─ main.tsx / router/index.tsx       # 装配组织上下文提供者与新路由
 ```
 
-依赖方向不变：`pages → hooks/stores/api/components → utils/constants/types`，不可反向。
+依赖方向不变：`pages → hooks/stores/api/components → utils/constants/types`，不可反向。`utils/http.ts` 不反向依赖 stores——组织 id 经 `setOrgIdProvider` 注入。
 
-### 3.2 路由与导航
+### 3.2 状态与数据流
+
+- **组织上下文（D9 前端落点）**：`main.tsx` 注册提供者——URL 命中 `/organizations/:orgId/*` 时取 URL 的 orgId（详情页唯一事实来源），否则回落 zustand `currentOrgId`；`utils/http.ts` 请求拦截器自动写入 `X-Organization-Id` 头。login/register/refresh 等认证接口无需该头（后端不校验）
+- Query key 约定：`['org', orgId, 'agents', name ?? '', status ?? '']`、`['org', orgId, 'agent', agentId]`、`['org', orgId, 'agent', agentId, 'versions']`（orgId 参与 key 以便切换组织时自然换缓存，实际隔离仍靠请求头）
+- 缓存联动（invalidate）：创建/编辑/启停 → 列表前缀失效 `['org', orgId, 'agents']`；版本流转（创建/发布/回滚）→ 版本 key + 详情 key + 列表；删除 → 列表失效 + `removeQueries` 详情与版本 key
+- 角色可见性由 `canManageAgent` 纯函数收敛（owner/admin），后端为准
+
+### 3.3 路由与导航
 
 ```
 RequireAuth
 └─ AppLayout
-   ├─ /organizations/:orgId/agents            List  智能体管理
-   ├─ /organizations/:orgId/agents/new        Form  创建（新建态）
-   ├─ /organizations/:orgId/agents/:agentId   Detail  智能体详情
-   └─ /organizations/:orgId/agents/:agentId/edit  Form  编辑（编辑态）
+   ├─ /organizations/:orgId/agents                     List
+   ├─ /organizations/:orgId/agents/new                 Form（创建态）
+   ├─ /organizations/:orgId/agents/:agentId            Detail
+   ├─ /organizations/:orgId/agents/:agentId/edit       Form（编辑态：仅基础信息）
+   └─ /organizations/:orgId/agents/:agentId/versions/new   VersionForm（新建版本）
 ```
 
-- 侧边栏在「成员管理」下方追加「智能体管理」，复用现有 `orgNavDisabled` 置灰逻辑（无组织时置灰）；创建 / 编辑两个 Form 入口不由侧边栏导航，从 List / Detail 页进入
-- 路由声明顺序约束：`/agents/new` 必须声明在 `/agents/:agentId` **之前**（同 organization.md 中 `members/me` 的既有约束）
-
-### 3.3 状态与数据流
-
-- Query key 约定：`['org', orgId, 'agents', name ?? '', status ?? '']`（name/status 恒占两个槽位，无筛选时为空串）与 `['org', orgId, 'agent', agentId]`
-- 缓存联动（invalidate）：创建/编辑/启停/删除 → `['org', orgId, 'agents']`（前缀失效，覆盖所有筛选组合）；编辑/启停 → 另失效 `['org', orgId, 'agent', agentId]`；删除 → 另 `removeQueries` 该 agent 的详情 key
-- `orgId` / `agentId` 取自 `useParams`（URL 是唯一事实来源，同组织模块约定）；无 `currentOrgId` 或落在非法路径时由现有 RequireAuth / OrgSwitcher 回落机制兜底
-- 角色可见性由纯函数收敛（`constants/agent-options.ts`，同 organization.md）：`canManageAgent(myRole)` = owner/admin，前端据此隐藏「新建 / 编辑 / 启停 / 删除」入口，后端为准；Form 页对 member/viewer 直显「没有权限管理智能体」兜底（后端为准）
+- 侧边栏「智能体管理」复用 `orgNavDisabled` 置灰逻辑；路由声明顺序：`/agents/new` 在 `/:agentId` 之前
+- 前端路径仍含 orgId（用于组织上下文与缓存 key，D9 决策范围外的 UI 细节）；API 调用为顶层 `/agents`
 
 ### 3.4 页面布局设计（核心）
 
-统一沿用 Tailwind + 现有视觉语言（indigo 主色、neutral 灰阶、卡片圆角），内容区为 AppLayout 右侧 Outlet。
-
-**3.4.1 列表页 List.tsx**
+**3.4.1 列表页 List.tsx**（对齐需求 3.3 列表展示字段）
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │ 智能体管理                     [＋ 新建智能体]   ← 页头   │
-│ 智能体配置、启停与生命周期管理（副标题）                   │
 ├──────────────────────────────────────────────────────────┤
-│ [🔍 按名称搜索…]  [状态 ▾ 全部/已启用/已停用]  共 N 个   ← 工具条
+│ [🔍 按名称搜索…]  [状态 ▾]  共 N 个            ← 工具条   │
 ├──────────────────────────────────────────────────────────┤
-│ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│ │ 名 称 [●启用]│ │ 名称 [○停用] │ │ 名称        │          │
-│ │ 描述（2 行截断）│ │ …           │ │ …           │  ← 卡片 │
-│ │ model/provider│ │            │ │            │   网格   │
-│ │ 更新于 xx    │ │            │ │            │ (1/2/3列) │
-│ │ [查看][编辑] │ │            │ │            │          │
-│ └─────────────┘ └─────────────┘ └─────────────┘          │
+│ ┌──────────────┐ ┌──────────────┐               (1/2/3列)│
+│ │ (头像) 名称    │ │              │   卡片 = 需求展示字段  │
+│ │  [●状态] v2   │ │              │   名称/当前版本/状态/  │
+│ │ 描述(2行截断) │ │              │   创建时间 + 操作      │
+│ │ 创建于 xx     │ │              │                        │
+│ └──────────────┘ └──────────────┘                        │
 └──────────────────────────────────────────────────────────┘
 ```
 
-- 卡片承载：名称 + 状态徽章（绿=启用 / 灰=停用）、描述（2 行截断）、`provider / model` 组合徽章、更新时间；操作列「查看 / 编辑」（owner/admin 另见开关与删除入口：开关直接用行内 toggle 调启停接口，删除放 Detail 危险区，避免列表页误删）
-- 搜索框受控输入，change 即重新查询（与 Members 页 email 过滤同模式）；状态下拉过滤
-- 空状态：无结果时展示引导文案 + 「新建智能体」按钮；member/viewer 隐藏页头新建按钮与卡片操作，仅读卡片
+- 卡片：头像（URL 或首字母圆）· 名称 · 状态徽章 · 「当前版本 vN」· 创建时间；操作列（owner/admin）「查看 / 编辑 / 行内启停开关」，删除仅 Detail 危险区
+- 搜索受控输入即查（同 Members 邮箱过滤模式）
 
-**3.4.2 表单页 Form.tsx（创建 / 编辑共用，左右分栏）**
+**3.4.2 表单页 Form.tsx（创建 / 编辑共用）**
 
-```
-┌───────────────────────────────┬──────────────────────┐
-│ 基础信息                     │  Agent 实时预览（sticky）│
-│ 名称*  [____________]        │  ┌──────────────────┐ │
-│ 描述   [____________]        │  │ 名称  [●启用]     │ │
-│                              │  │ 描述              │ │
-│ 模型配置                     │  │ [provider/model] │ │
-│ Provider* [____] Model* [__] │  │ temp 0.70 · tok — │ │
-│ Temperature ──●── 0.70      │  └──────────────────┘ │
-│ Max Tokens  [______]        │  提示词 N 字符        │
-│                              │                      │
-│ 系统提示词                   │  [取消] [保存]  ← 提交栏│
-│ ┌────────────────────────┐  │                      │
-│ │ (等宽字体大文本框)       │  │                      │
-│ └────────────────────────┘  │                      │
-└──────────────────────────────┴──────────────────────┘
-```
+- 创建态：左栏三分区表单（基础信息：名称/描述/头像/状态 + 模型配置：Provider/模型/Temperature 滑块/Max Tokens + 系统提示词）+ 右栏 sticky 实时预览卡；提交即创建并自动生成 v1 发布
+- 编辑态：仅基础信息单列表单（D3：模型与提示词走版本页），保存后回详情
+- 校验 RHF + zod（与后端 schema 同步）；模型配置必填在创建态由 `setError` 收敛
 
-- 左栏（约 2/3 宽）三个分区卡片：基础信息 → 模型配置 → 系统提示词，纵向滚动；右栏（约 1/3 宽，`sticky`）实时预览卡 + 提交栏，表单值变化即刷新预览（无需额外状态，直读 RHF watch）
-- 窄屏（`lg` 以下）单列布局，预览卡折叠为底部摘要条
-- 校验沿用 RHF + zod，与后端 `schemas/agent.py` 同步：名称 1–100、provider 1–50、model 1–100、temperature 0–2（zod `refine`）、max_tokens 可选 1–100000、system_prompt ≤ 10000（长度上限需与后端一致，见 3.5 待确认项）
-- 编辑态用 `useAgent(orgId, agentId)` 回填；保存成功 invalidate 列表 + 详情，编辑态回详情页、新建态跳详情页
+**3.4.3 版本表单页 VersionForm.tsx**
 
-**3.4.3 详情页 Detail.tsx**
+- 基于当前版本预填（Provider/模型/Temperature/Max Tokens/系统提示词），提交仅**创建版本**，回到详情页手动发布
+
+**3.4.4 详情页 Detail.tsx**
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ ← 返回  名 称 [●启用]        [停用/启用] [编辑] [删除]   ← 页头
+│ ← 返回   (头像) 名称 [●状态] v2        [启停] [编辑]     │
+├───────────────────────────────┬──────────────────────────┤
+│ 基础信息（描述/创建者/时间）    │ 当前版本 v2（模型/参数/  │
+│                               │ 系统提示词）             │
+├───────────────────────────────┴──────────────────────────┤
+│ 版本历史                    [＋ 新建版本]                 │
+│ v2 provider/model 创建者·时间 [当前]                      │
+│ v1 provider/model 创建者·时间 [回滚]                      │
 ├──────────────────────────────────────────────────────────┤
-│ ┌───────────────┬──────────────────────────────────┐    │
-│ │ 模型配置      │  系统提示词（等宽、可滚动、全文）  │    │
-│ │ provider/model│                                  │    │
-│ │ temperature   │                                  │    │
-│ │ max_tokens    │                                  │    │
-│ │ 创建者/时间    │                                  │    │
-│ └───────────────┴──────────────────────────────────┘    │
-├──────────────────────────────────────────────────────────┤
-│ 危险区                                                   │
-│ 删除智能体：输入名称确认 → [删除]（样式同组织解散危险区） │
+│ 危险区：删除智能体（输名称确认，版本一并清除）            │
 └──────────────────────────────────────────────────────────┘
 ```
 
-- 页头操作按 `canManageAgent` 渲染（member/viewer 只读）；「停用/启用」为状态切换按钮，调启停接口
-- 危险区删除：输入完整名称才可提交（复用组织解散的交互模式）
-- 详情页同时作为后续「与智能体对话」的入口锚点，V1 仅预留布局不实现（chat 模块落地时在此加「开始对话」按钮）
-
-### 3.5 前端细节与待确认项
-
-- Provider 下拉给出常用候选项（如 openai / anthropic / zhipu / deepseek）但允许自由输入（D3 配套，用可编辑 combobox 或 datalist）
-- 错误文案透传后端中文 message，网络异常走 `errorMessage()` 兜底（沿用现有路径）
-- 待实施时确认：system_prompt 的长度上限（对应后端 `Field(max_length=...)`），建议 10000 字符并在 zod / Pydantic 两端同步
+- 版本历史语义映射（需求 3.4）：非当前且序号**小于**当前 → 「回滚」；序号**大于**当前（未发布新版本）→ 「发布」
+- 回滚二次确认（window.confirm）；发布/回滚成功后刷新版本 + 详情 + 列表缓存
+- member/viewer 只读：无操作按钮与危险区（后端为准）
 
 ## 4. 关键流程时序
 
-**4.1 创建智能体**
+**4.1 创建智能体（含 v1 发布）**
 
-1. List 页「新建」→ Form 新建态 → 校验通过 → `POST /organizations/{org_id}/agents`
-2. 后端：AdminCtx 校验 → 名称冲突预查（409）→ 插入（唯一约束兜底）→ `db.refresh` → commit
-3. 前端 invalidate `['org', orgId, 'agents']` → 跳 `/organizations/:orgId/agents/:newId`（详情页）
+1. List「新建」→ Form 创建态校验 → `POST /agents`（头带 X-Organization-Id）
+2. 后端：AdminCtx → 名称冲突预查 → 事务建 agent + v1 → 显式 flush 指向 current_version_id → refresh → commit
+3. 前端 invalidate 列表 → 跳详情页（展示当前版本 v1）
 
-**4.2 编辑智能体**
+**4.2 编辑基础信息**
 
-1. Detail / List「编辑」→ Form 编辑态回填 → `PATCH /organizations/{org_id}/agents/{agent_id}`
-2. 后端：归属校验（他组织 404）→ `exclude_unset` 局部更新 → 改名冲突规则同创建 → commit
-3. 前端 invalidate 列表 + 详情 → 回详情页
+1. Detail / List「编辑」→ Form 编辑态回填 → `PATCH /agents/{id}`
+2. 后端：归属校验 → `exclude_unset` 局部更新 → commit → refresh
+3. 前端 invalidate 详情 + 列表 → 回详情
 
-**4.3 启停**
+**4.3 新建版本与发布 / 回滚**
 
-1. List 卡片行内 toggle 或 Detail 页头按钮 → `PATCH .../agents/{agent_id}/status`
-2. 后端：Literal 校验 → 更新 status → commit
-3. 前端 invalidate 列表 + 详情，状态徽章即时刷新（disabled 仅记录，运行侧影响由 chat 模块处理，D4）
+1. Detail「新建版本」→ VersionForm（基于当前 v 预填）→ `POST /agents/{id}/versions`
+2. 后端：版本号 +1，仅创建不发布 → 前端刷新版本列表
+3. 发布：`POST .../versions/{vid}/publish`；回滚：`POST .../versions/{vid}/rollback`——同一 `_set_current` 事务更新 `current_version_id` → refresh → 详情联动刷新
 
-**4.4 删除智能体**
+**4.4 启停 / 删除**
 
-1. Detail 危险区输入名称匹配 → `DELETE /organizations/{org_id}/agents/{agent_id}`
-2. 后端：归属校验 → 硬删除 → commit（D5）
-3. 前端 invalidate 列表 + `removeQueries` 详情 → 跳 `/organizations/:orgId/agents`
+1. 启停：List 行内开关 / Detail 页头按钮 → `PATCH .../status` → 刷新对应缓存
+2. 删除：Detail 危险区输名称确认 → `DELETE /agents/{id}` → 版本随 DB 级联清理 → 前端 removeQueries 详情 → 跳列表
 
-**4.5 组织解散联动（跨模块）**
+**4.5 组织解散联动（跨模块，D10）**
 
-1. Settings 解散（沿用 organization 4.6 流程）→ `DELETE /organizations/{org_id}`
-2. 后端 `dissolve` 事务顺序：先删该组织全部 agents（D8）→ 删成员关系 → 删组织 → commit
-3. 前端不变：清空组织上下文并跳转；其组织下的 agent 缓存随 `['org', orgId, ...]` 前缀一并清理
+1. Settings 解散 → `DELETE /organizations/{org_id}`
+2. 后端 dissolve 事务顺序：先删 agents（versions 级联）→ 删成员关系 → 删组织 → commit
 
 ## 5. 错误码对照表
 
@@ -279,28 +286,29 @@ RequireAuth
 | --- | --- | --- | --- |
 | `AGENT_NOT_FOUND` | 404 | agent 不存在，或不属于当前组织（归属校验统一返回，不泄露存在性） | 后端 message（智能体不存在） |
 | `AGENT_NAME_CONFLICT` | 409 | 创建 / 改名时名称在组织内已存在（预查 + 唯一约束兜底） | 后端 message（名称已存在） |
-| `AGENT_FIELD_REQUIRED` | 422 | 更新时 name / provider / model 显式传 null | 后端 message（如「模型提供方不能为空」） |
-| （Pydantic 422） | 422 | 名称长度、temperature 越界、max_tokens 越界、status 非法值、缺必填字段 | 前端 zod 先行拦截，透传后端 message |
-| 复用 `ORGANIZATION_NOT_FOUND` | 404 | 组织不存在 / 非成员访问（依赖层抛出） | 后端 message |
-| 复用 `NOT_ORG_MEMBER` | 403 | 当前用户不是该组织成员（数据隔离） | 后端 message |
-| 复用 `FORBIDDEN` | 403 | member/viewer 发起管理操作（AdminCtx 不命中） | 后端 message |
+| `AGENT_FIELD_REQUIRED` | 422 | PATCH 时 name 显式传 null | 后端 message（名称不能为空） |
+| `AGENT_VERSION_NOT_FOUND` | 404 | 版本不存在或不属于该 agent（发布/回滚路径） | 后端 message（智能体版本不存在） |
+| （Pydantic 422） | 422 | 名称长度、temperature 越界、max_tokens 越界、status/model_provider/model_name 非法或缺省 | 前端 zod 先行拦截，透传后端 message |
+| 复用 `FORBIDDEN` | 403 | X-Organization-Id 缺失/非数字；member/viewer 管理操作（AdminCtx 不命中） | 后端 message |
+| 复用 `ORGANIZATION_NOT_FOUND` | 404 | 请求头组织不存在 | 后端 message |
+| 复用 `NOT_ORG_MEMBER` | 403 | 当前用户不是请求头组织成员（数据隔离） | 后端 message |
 | （非业务错误） | — | 网络中断、超时等 axios 错误 | `errorMessage()` 兜底「网络异常，请稍后重试」 |
 
 响应体格式统一为 `{code, message, detail}`（`main.py` 全局异常处理器输出）；`message` 即前端直接展示文案，保持中文。
 
 ## 6. 维护约定与约束
 
-以下约定在实施与后续修改时必须遵守，避免引入回退：
+以下约定在修改前必须了解设计意图，避免引入回退：
 
-1. **Agent 接口一律挂 `/organizations/{org_id}/agents`**：组织存在 / 成员身份 / 角色三重校验由 `require_org_role` 别名（OrgCtx / AdminCtx）完成，service 层禁止再查 membership
-2. **归属校验是第二道闸**：任何按 `agent_id` 操作的路径必须校验 `agent.organization_id == org.id`，否则 404 `AGENT_NOT_FOUND`（不泄露跨组织存在性）
-3. **名称唯一（D1）**：预查 409 + `IntegrityError` 兜底缺一不可（并发场景），改名（含未改名提交）同样走该规则
-4. **组织解散必须先删 agents（D8）**：`dissolve` 事务内的删除顺序为 agents → 成员关系 → 组织，调整 organization 模块时不得破坏该顺序
-5. **新对象/更新后取回 server_default 与 onupdate**：创建后必须 `db.refresh`（created_at / status）；**更新与启停提交后同样必须 `db.refresh`**，否则 `updated_at`（onupdate）过期后会在 async 上下文触发懒加载并抛 `MissingGreenlet`
-6. **system_prompt 不在 DB 层设默认值**：TEXT 列不支持字面量 server_default；非空由 schema 默认 `""` 与应用层保证，勿在迁移中给 TEXT 列加普通默认值
-7. **status 仅 `enabled` / `disabled` 两值**：由 `Literal` 与 DB 默认值双重约束；启停走独立端点，禁止在通用 PATCH 中夹带 status（保持职责单一）
-8. **Query key 联动**：按 3.3 的联动表同步 invalidate；删除必须 `removeQueries` 详情 key，防止回详情页读到陈旧缓存
+1. **Agent 接口一律顶层 `/agents` + `X-Organization-Id` 请求头（D9）**：组织校验唯一入口是 `require_header_org_role` 别名（OrgCtx / AdminCtx），service 层禁止再查 membership；后端不接受路径或 query 传组织 id
+2. **归属校验是第二道闸**：agent 校验 `organization_id == org.id`，版本校验 `agent_id == agent.id`，均返回 404（不泄露跨组织存在性）
+3. **配置版本化（D2/D3）**：模型配置与提示词只存在于 `agent_versions`；PATCH 不得引入配置字段，配置变更一律走「新建版本 → 发布/回滚」
+4. **环形外键不可建 ORM relationship**：`agents.current_version_id ↔ agent_versions.agent_id` 互指，加载一律显式查询（`_current_version` / `list_versions`），避免懒加载与 `MissingGreenlet`
+5. **创建事务必须显式 flush 再 refresh**：`current_version_id` 的 post-flush 赋值依赖显式 `db.flush()`（曾实测 refresh 不触发 autoflush 导致赋值丢失）；任何 UPDATE 提交后 refresh 取回 `updated_at`（onupdate）
+6. **名称唯一（D1）与版本序号**：预查 409 + `IntegrityError` 兜底缺一不可；版本序号 = `max(version)+1`，唯一约束兜底并发
+7. **组织解散必须先删 agents（D10）**：`dissolve` 事务顺序 agents（versions 级联）→ 成员关系 → 组织，不得破坏
+8. **Query key 联动**：按 3.2 的联动表同步 invalidate；删除必须 `removeQueries` 详情与版本 key；orgId 在 key 中仅作缓存隔离，实际隔离靠请求头
 9. **前端角色可见性与后端同步维护**：`canManageAgent` 与权限矩阵一一对应；改矩阵时两处同改，后端为准
-10. **若未来绑定知识库 / 工具（推翻 D2）**：新增关联表并新建 Alembic 迁移，不修改已执行的迁移文件
-11. **chat / 日志模块落地后复审 D5**：一旦 agents 被对话记录引用，需重新评估硬删除 → 级联 / 软删策略，并同步更新本文档
-12. **测试沿用 conftest 模式**：清理链已按外键顺序先删 Agent；新增用例复用测试库准备与清理机制；新增错误码 message 保持中文（前端透传路径）
+10. **若未来绑定知识库 / 工具（需求 3.3 编辑 + 3.6/3.7）**：新增关联表（需求 4.7 agent_tools 等）并新建 Alembic 迁移；接口按需求 3.7 挂 `/agents/{id}/tools`，不修改已执行迁移
+11. **chat / 日志模块落地后复审 D6**：一旦 agents 被对话记录引用，需重新评估硬删除 → 级联 / 软删策略
+12. **测试沿用 conftest 模式**：清理链已按外键顺序（版本 → 智能体 → 成员 → 组织 → 用户）；新增错误码 message 保持中文（前端透传路径）

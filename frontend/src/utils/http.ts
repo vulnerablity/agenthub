@@ -26,6 +26,14 @@ export function setOnUnauthorized(handler: () => void): void {
   unauthorizedHandler = handler
 }
 
+// 组织上下文提供者（main.tsx 装配：URL 中的 orgId 优先，回落 zustand currentOrgId）
+// 所有请求自动携带 X-Organization-Id 请求头，后端按此做顶层资源（/agents 等）的组织隔离
+let orgIdProvider: (() => number | null) | null = null
+
+export function setOrgIdProvider(provider: () => number | null): void {
+  orgIdProvider = provider
+}
+
 /** 调用刷新接口；使用无拦截器的裸 axios 实例，避免递归进入响应拦截器 */
 async function refreshAccessToken(): Promise<boolean> {
   const refreshToken = getRefreshToken()
@@ -60,6 +68,10 @@ http.interceptors.request.use((config) => {
   const token = getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+  const orgId = orgIdProvider?.()
+  if (orgId != null) {
+    config.headers['X-Organization-Id'] = String(orgId)
   }
   return config
 })

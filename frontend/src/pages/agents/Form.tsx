@@ -1,5 +1,6 @@
 // pages/agents/Form.tsx
-// 智能体创建/编辑共用表单：左栏分区表单（基础信息/模型配置/系统提示词）+ 右栏 sticky 实时预览
+// 智能体创建/编辑共用表单：创建态 = 基础信息 + 初始模型配置 + 提示词（自动生成 v1）；
+// 编辑态仅基础信息（名称/描述/头像），模型与提示词变更走版本页（需求 3.3/3.4）
 import { useEffect, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -9,19 +10,22 @@ import { z } from 'zod'
 
 import { agentApi } from '@/api'
 import TextField from '@/components/form/TextField'
-import { PROVIDER_OPTIONS, canManageAgent } from '@/constants/agent-options'
+import { AGENT_STATUS_LABELS, PROVIDER_OPTIONS, canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import { agentDetailPath, agentsPath } from '@/constants/routes'
 import { useAgent } from '@/hooks/useAgent'
 import { useOrg } from '@/hooks/useOrg'
-import type { AgentCreateRequest } from '@/types'
+import type { AgentCreateRequest, AgentUpdateRequest } from '@/types'
 
 // temperature / max_tokens 以字符串承载：空串表示「运行时默认」，与后端 null 语义对齐
+// 模型配置必填仅创建态生效（onSubmit 内 setError 判定，编辑态不展示这些字段）
 const agentSchema = z.object({
   name: z.string().min(1, '请输入智能体名称').max(100, '名称最多 100 个字符'),
-  description: z.string().max(500, '描述最多 500 个字符'),
-  provider: z.string().min(1, '请输入模型提供方').max(50, '提供方最多 50 个字符'),
-  model: z.string().min(1, '请输入模型名称').max(100, '模型名最多 100 个字符'),
+  description: z.string().max(5000, '描述最多 5000 个字符'),
+  avatarUrl: z.string().max(500, '头像地址最多 500 个字符'),
+  status: z.enum(['enabled', 'disabled']),
+  provider: z.string().max(50, '提供方最多 50 个字符'),
+  modelName: z.string().max(100, '模型名最多 100 个字符'),
   temperature: z
     .string()
     .refine(
@@ -44,23 +48,34 @@ type AgentForm = z.infer<typeof agentSchema>
 const EMPTY_FORM: AgentForm = {
   name: '',
   description: '',
+  avatarUrl: '',
+  status: 'enabled',
   provider: '',
-  model: '',
+  modelName: '',
   temperature: '',
   maxTokens: '',
   systemPrompt: '',
 }
 
-/** 表单值 → 请求体：空串映射为 null（未配置 = 运行时默认） */
-function buildPayload(values: AgentForm): AgentCreateRequest {
+function buildCreatePayload(values: AgentForm): AgentCreateRequest {
   return {
     name: values.name,
     description: values.description.trim() ? values.description.trim() : null,
-    provider: values.provider,
-    model: values.model,
+    avatar_url: values.avatarUrl.trim() ? values.avatarUrl.trim() : null,
+    status: values.status,
+    system_prompt: values.systemPrompt,
+    model_provider: values.provider.trim(),
+    model_name: values.modelName.trim(),
     temperature: values.temperature === '' ? null : Number(values.temperature),
     max_tokens: values.maxTokens === '' ? null : Number(values.maxTokens),
-    system_prompt: values.systemPrompt,
+  }
+}
+
+function buildUpdatePayload(values: AgentForm): AgentUpdateRequest {
+  return {
+    name: values.name,
+    description: values.description.trim() ? values.description.trim() : null,
+    avatar_url: values.avatarUrl.trim() ? values.avatarUrl.trim() : null,
   }
 }
 
@@ -82,6 +97,7 @@ export default function AgentForm() {
     handleSubmit,
     reset,
     setValue,
+    setError,
     control,
     formState: { errors },
   } = useForm<AgentForm>({
@@ -89,33 +105,26 @@ export default function AgentForm() {
     defaultValues: EMPTY_FORM,
   })
 
-  // 实时预览：订阅全部表单值（useWatch 返回可记忆的值，规避 watch() 闭包警告）
+  // 创建态实时预览（编辑态不渲染预览面板）
   const preview = useWatch({ control })
 
-  // 编辑态：详情到达后回填表单
+  // 编辑态：详情到达后回填基础信息
   useEffect(() => {
     if (isEdit && agent) {
       reset({
+        ...EMPTY_FORM,
         name: agent.name,
         description: agent.description ?? '',
-        provider: agent.provider,
-        model: agent.model,
-        temperature: agent.temperature != null ? String(agent.temperature) : '',
-        maxTokens: agent.max_tokens != null ? String(agent.max_tokens) : '',
-        systemPrompt: agent.system_prompt,
+        avatarUrl: agent.avatar_url ?? '',
+        status: agent.status,
       })
     }
   }, [agent, isEdit, reset])
 
   const submitMutation = useMutation({
-    mutationFn: (values: AgentForm) => {
-      const payload = buildPayload(values)
-      return isEdit
-        ? agentApi.update(orgId!, agentId!, payload)
-        : agentApi.create(orgId!, payload)
-    },
+    mutationFn: (values: AgentForm) =>
+      isEdit ? agentApi.update(agentId!, buildUpdatePayload(values)) : agentApi.create(buildCreatePayload(values)),
     onSuccess: async ({ data }) => {
-      // 列表按前缀失效（覆盖所有过滤组合的缓存）
       await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'agents'] })
       if (isEdit) {
         await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'agent', agentId] })
@@ -140,13 +149,150 @@ export default function AgentForm() {
 
   // 编辑态数据未就绪时禁用提交，避免空表单覆盖
   const formReady = !isEdit || agent != null
-  const temperature = preview.temperature
   const cancelTo = isEdit ? agentDetailPath(orgId, agentId!) : agentsPath(orgId)
 
   const onSubmit = handleSubmit((values) => {
     setApiError('')
+    // 仅创建态：模型配置必填（编辑态不收集这些字段）
+    if (!isEdit) {
+      if (!values.provider.trim()) {
+        setError('provider', { message: '请输入模型提供方' })
+        return
+      }
+      if (!values.modelName.trim()) {
+        setError('modelName', { message: '请输入模型名称' })
+        return
+      }
+    }
     submitMutation.mutate(values)
   })
+
+  const basicSection = (
+    <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <h3 className="text-base font-semibold text-neutral-900">基础信息</h3>
+      <div className="mt-4 space-y-4">
+        <TextField
+          label="名称"
+          placeholder="例如：客服助手"
+          error={errors.name?.message}
+          {...register('name')}
+        />
+        <TextField
+          label="描述"
+          placeholder="一句话说明智能体的用途（可选）"
+          error={errors.description?.message}
+          {...register('description')}
+        />
+        <TextField
+          label="头像地址"
+          placeholder="https://…（可选，留空使用首字母头像）"
+          error={errors.avatarUrl?.message}
+          {...register('avatarUrl')}
+        />
+        {!isEdit ? (
+          <div className="flex flex-col gap-2">
+            <label htmlFor="agent-status" className="text-sm font-medium text-neutral-700">
+              状态
+            </label>
+            <select
+              id="agent-status"
+              {...register('status')}
+              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            >
+              <option value="enabled">{AGENT_STATUS_LABELS.enabled}</option>
+              <option value="disabled">{AGENT_STATUS_LABELS.disabled}</option>
+            </select>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+
+  const configSection = (
+    <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <h3 className="text-base font-semibold text-neutral-900">模型配置（初始版本 v1）</h3>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <TextField
+            label="LLM Provider"
+            placeholder="例如：openai"
+            list="provider-options"
+            error={errors.provider?.message}
+            {...register('provider')}
+          />
+          <datalist id="provider-options">
+            {PROVIDER_OPTIONS.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </div>
+        <TextField
+          label="模型"
+          placeholder="例如：gpt-4o-mini"
+          error={errors.modelName?.message}
+          {...register('modelName')}
+        />
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="agent-temperature" className="text-sm font-medium text-neutral-700">
+            Temperature
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              id="agent-temperature"
+              type="range"
+              min={0}
+              max={2}
+              step={0.1}
+              value={preview.temperature === '' ? '0' : preview.temperature}
+              onChange={(e) => setValue('temperature', Number(e.target.value).toString())}
+              className="flex-1 accent-indigo-600"
+            />
+            <span className="w-12 shrink-0 text-right font-mono text-sm text-neutral-700">
+              {preview.temperature === '' ? '默认' : Number(preview.temperature).toFixed(1)}
+            </span>
+          </div>
+          <p className="text-xs text-neutral-400">留空使用运行时默认（0–2）</p>
+          {errors.temperature ? (
+            <p className="text-xs text-red-500">{errors.temperature.message}</p>
+          ) : null}
+        </div>
+        <TextField
+          label="Max Tokens"
+          type="number"
+          placeholder="留空使用运行时默认"
+          error={errors.maxTokens?.message}
+          {...register('maxTokens')}
+        />
+      </div>
+    </section>
+  )
+
+  const promptSection = (
+    <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <h3 className="text-base font-semibold text-neutral-900">系统提示词</h3>
+      <div className="mt-4 flex flex-col gap-2">
+        <label htmlFor="agent-system-prompt" className="text-sm font-medium text-neutral-700">
+          System Prompt
+        </label>
+        <textarea
+          id="agent-system-prompt"
+          rows={10}
+          placeholder="定义智能体的角色、行为与回答风格…"
+          className={`w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:ring-2 ${
+            errors.systemPrompt
+              ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+              : 'border-neutral-300 focus:border-indigo-500 focus:ring-indigo-100'
+          }`}
+          {...register('systemPrompt')}
+        />
+        {errors.systemPrompt ? (
+          <p className="text-xs text-red-500">{errors.systemPrompt.message}</p>
+        ) : null}
+      </div>
+    </section>
+  )
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -155,7 +301,7 @@ export default function AgentForm() {
           {isEdit ? '编辑智能体' : '新建智能体'}
         </h2>
         <p className="mt-1 text-sm text-neutral-500">
-          {org ? org.name : '加载中…'}
+          {org.name}
           {isEdit && agent ? ` · ${agent.name}` : ''}
         </p>
       </div>
@@ -169,108 +315,13 @@ export default function AgentForm() {
           noValidate
           className="space-y-6 lg:col-span-2"
         >
-          <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h3 className="text-base font-semibold text-neutral-900">基础信息</h3>
-            <div className="mt-4 space-y-4">
-              <TextField
-                label="名称"
-                placeholder="例如：客服助手"
-                error={errors.name?.message}
-                {...register('name')}
-              />
-              <TextField
-                label="描述"
-                placeholder="一句话说明智能体的用途（可选）"
-                error={errors.description?.message}
-                {...register('description')}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h3 className="text-base font-semibold text-neutral-900">模型配置</h3>
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <TextField
-                  label="LLM Provider"
-                  placeholder="例如：openai"
-                  list="provider-options"
-                  error={errors.provider?.message}
-                  {...register('provider')}
-                />
-                <datalist id="provider-options">
-                  {PROVIDER_OPTIONS.map((p) => (
-                    <option key={p} value={p} />
-                  ))}
-                </datalist>
-              </div>
-              <TextField
-                label="模型"
-                placeholder="例如：gpt-4o-mini"
-                error={errors.model?.message}
-                {...register('model')}
-              />
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <label htmlFor="agent-temperature" className="text-sm font-medium text-neutral-700">
-                  Temperature
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="agent-temperature"
-                    type="range"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={temperature === '' ? '0' : temperature}
-                    onChange={(e) => setValue('temperature', Number(e.target.value).toString())}
-                    className="flex-1 accent-indigo-600"
-                  />
-                  <span className="w-12 shrink-0 text-right font-mono text-sm text-neutral-700">
-                    {temperature === '' ? '默认' : Number(temperature).toFixed(1)}
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-400">留空使用运行时默认（0–2）</p>
-                {errors.temperature ? (
-                  <p className="text-xs text-red-500">{errors.temperature.message}</p>
-                ) : null}
-              </div>
-              <TextField
-                label="Max Tokens"
-                type="number"
-                placeholder="留空使用运行时默认"
-                error={errors.maxTokens?.message}
-                {...register('maxTokens')}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h3 className="text-base font-semibold text-neutral-900">系统提示词</h3>
-            <div className="mt-4 flex flex-col gap-2">
-              <label
-                htmlFor="agent-system-prompt"
-                className="text-sm font-medium text-neutral-700"
-              >
-                System Prompt
-              </label>
-              <textarea
-                id="agent-system-prompt"
-                rows={10}
-                placeholder="定义智能体的角色、行为与回答风格…"
-                className={`w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:ring-2 ${
-                  errors.systemPrompt
-                    ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-                    : 'border-neutral-300 focus:border-indigo-500 focus:ring-indigo-100'
-                }`}
-                {...register('systemPrompt')}
-              />
-              {errors.systemPrompt ? (
-                <p className="text-xs text-red-500">{errors.systemPrompt.message}</p>
-              ) : null}
-            </div>
-          </section>
+          {basicSection}
+          {!isEdit ? (
+            <>
+              {configSection}
+              {promptSection}
+            </>
+          ) : null}
 
           <div className="flex items-center gap-3">
             <button
@@ -290,58 +341,66 @@ export default function AgentForm() {
           </div>
         </form>
 
-        <aside className="self-start lg:sticky lg:top-8">
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 shadow-sm">
-            <h3 className="text-xs font-medium text-neutral-400">实时预览</h3>
-            <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-sm font-semibold text-neutral-900">
-                  {preview.name || '未命名智能体'}
+        {!isEdit ? (
+          <aside className="self-start lg:sticky lg:top-8">
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 shadow-sm">
+              <h3 className="text-xs font-medium text-neutral-400">实时预览</h3>
+              <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold text-neutral-900">
+                    {preview.name || '未命名智能体'}
+                  </p>
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-0.5 text-xs font-medium ${
+                      preview.status === 'enabled'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-neutral-100 text-neutral-500'
+                    }`}
+                  >
+                    {AGENT_STATUS_LABELS[preview.status ?? 'enabled']}
+                  </span>
+                </div>
+                <p className="mt-2 line-clamp-2 min-h-8 text-xs text-neutral-500">
+                  {preview.description || '暂无描述'}
                 </p>
-                <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-0.5 text-xs font-medium text-emerald-700">
-                  已启用
-                </span>
+                {preview.provider || preview.modelName ? (
+                  <p className="mt-3 text-xs text-neutral-400">
+                    <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
+                      {preview.provider || 'provider'}
+                    </span>
+                    <span className="mx-1.5">/</span>
+                    <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
+                      {preview.modelName || 'model'}
+                    </span>
+                  </p>
+                ) : null}
+                <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
+                  <div className="flex justify-between">
+                    <dt>温度</dt>
+                    <dd className="font-mono">
+                      {preview.temperature === '' ? '默认' : Number(preview.temperature).toFixed(1)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Max Tokens</dt>
+                    <dd className="font-mono">{preview.maxTokens || '默认'}</dd>
+                  </div>
+                </dl>
               </div>
-              <p className="mt-2 line-clamp-2 min-h-8 text-xs text-neutral-500">
-                {preview.description || '暂无描述'}
+              <p className="mt-3 text-xs text-neutral-400">
+                提示词 {(preview.systemPrompt ?? '').length} 字符
               </p>
-              {preview.provider || preview.model ? (
-                <p className="mt-3 text-xs text-neutral-400">
-                  <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
-                    {preview.provider || 'provider'}
-                  </span>
-                  <span className="mx-1.5">/</span>
-                  <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
-                    {preview.model || 'model'}
-                  </span>
-                </p>
-              ) : null}
-              <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
-                <div className="flex justify-between">
-                  <dt>温度</dt>
-                  <dd className="font-mono">
-                    {preview.temperature === '' ? '默认' : Number(preview.temperature).toFixed(1)}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt>Max Tokens</dt>
-                  <dd className="font-mono">{preview.maxTokens || '默认'}</dd>
-                </div>
-              </dl>
+              <button
+                type="submit"
+                form="agent-form"
+                disabled={submitMutation.isPending || !formReady}
+                className="mt-4 hidden w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 lg:block"
+              >
+                {submitMutation.isPending ? '保存中…' : '保存智能体'}
+              </button>
             </div>
-            <p className="mt-3 text-xs text-neutral-400">
-              提示词 {(preview.systemPrompt ?? '').length} 字符
-            </p>
-            <button
-              type="submit"
-              form="agent-form"
-              disabled={submitMutation.isPending || !formReady}
-              className="mt-4 hidden w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 lg:block"
-            >
-              {submitMutation.isPending ? '保存中…' : '保存智能体'}
-            </button>
-          </div>
-        </aside>
+          </aside>
+        ) : null}
       </div>
     </div>
   )

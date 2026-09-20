@@ -1,14 +1,16 @@
 # repositories/agent_repo.py
-# agents 数据访问层（Service 层不直接写 SQL）
-from sqlalchemy import delete, select
+# agents / agent_versions 数据访问层（Service 层不直接写 SQL）
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Agent
+from app.models import Agent, AgentVersion
 
 
 class AgentRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    # ---------- Agent ----------
 
     async def get_by_id(self, agent_id: int) -> Agent | None:
         return await self.db.get(Agent, agent_id)
@@ -48,5 +50,42 @@ class AgentRepository:
         await self.db.delete(agent)
 
     async def delete_by_org(self, org_id: int) -> None:
-        """解散组织前清空其全部智能体（外键顺序，设计文档 D8）"""
+        """解散组织前清空其全部智能体（agent_versions 随外键 CASCADE 级联，设计文档 D8）"""
         await self.db.execute(delete(Agent).where(Agent.organization_id == org_id))
+
+    # ---------- AgentVersion ----------
+
+    async def get_version(self, version_id: int) -> AgentVersion | None:
+        return await self.db.get(AgentVersion, version_id)
+
+    async def create_version(self, version: AgentVersion) -> AgentVersion:
+        """新增版本并 flush 拿到自增 id"""
+        self.db.add(version)
+        await self.db.flush()
+        return version
+
+    async def next_version_number(self, agent_id: int) -> int:
+        """下一个版本序号 = 当前最大版本 + 1"""
+        result = await self.db.execute(
+            select(func.max(AgentVersion.version)).where(
+                AgentVersion.agent_id == agent_id
+            )
+        )
+        current = result.scalar_one()
+        return (current or 0) + 1
+
+    async def list_versions(
+        self,
+        agent_id: int | None = None,
+        version_ids: set[int] | None = None,
+    ) -> list[AgentVersion]:
+        """版本列表（新版本在前）：按 agent 过滤，或按 id 集合批量取（供列表页映射版本号）"""
+        stmt = select(AgentVersion).order_by(
+            AgentVersion.version.desc(), AgentVersion.id.desc()
+        )
+        if version_ids is not None:
+            stmt = stmt.where(AgentVersion.id.in_(version_ids))
+        elif agent_id is not None:
+            stmt = stmt.where(AgentVersion.agent_id == agent_id)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())

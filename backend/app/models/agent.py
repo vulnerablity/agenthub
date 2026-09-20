@@ -1,14 +1,11 @@
 # models/agent.py
-# 智能体表：组织作用域，V1 仅存配置（知识库/工具绑定见设计文档 D2）
+# 智能体表：组织作用域；配置项（提示词/模型参数）存放在 agent_versions（对应需求 4.4）
 from datetime import datetime
-from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
-    Integer,
-    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -27,14 +24,21 @@ class Agent(Base):
         BigInteger, ForeignKey("organizations.id"), index=True, nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
-    provider: Mapped[str] = mapped_column(String(50), nullable=False)
-    model: Mapped[str] = mapped_column(String(100), nullable=False)
-    temperature: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)
-    max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="enabled", server_default="enabled"
+    )
+    # 当前发布版本；与 agent_versions 构成环形外键，用 use_alter 延迟建约束（对应需求 4.4 current_version_id）
+    current_version_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "agent_versions.id",
+            use_alter=True,
+            name="fk_agents_current_version",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
     )
     created_by: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id"), nullable=False

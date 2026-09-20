@@ -11,6 +11,7 @@ export const ROUTE_PATHS = {
   AGENT_NEW: '/organizations/:orgId/agents/new',
   AGENT_DETAIL: '/organizations/:orgId/agents/:agentId',
   AGENT_EDIT: '/organizations/:orgId/agents/:agentId/edit',
+  AGENT_VERSION_NEW: '/organizations/:orgId/agents/:agentId/versions/new',
 } as const
 
 /** 生成带组织 id 的成员管理路径 */
@@ -41,4 +42,12 @@ export function agentDetailPath(orgId: number | string, agentId: number | string
 /** 生成带组织与智能体 id 的编辑路径 */
 export function agentEditPath(orgId: number | string, agentId: number | string): string {
   return `/organizations/${orgId}/agents/${agentId}/edit`
+}
+
+/** 生成带组织与智能体 id 的新建版本路径 */
+export function agentVersionNewPath(
+  orgId: number | string,
+  agentId: number | string,
+): string {
+  return `/organizations/${orgId}/agents/${agentId}/versions/new`
 }
