@@ -1,5 +1,5 @@
 # tests/test_agent.py
-# agent 接口集成测试：覆盖创建 / 列表过滤 / 权限矩阵 / 归属隔离 / 编辑 / 启停 / 删除 / 组织解散联动
+# agent 接口集成测试：覆盖请求头组织隔离 / 创建(v1 自动发布) / 列表 / 权限矩阵 / 版本发布回滚 / 删除 / 解散联动
 PASSWORD = "secret123"
 
 
@@ -21,6 +21,10 @@ def _auth(token):
     return {"Authorization": f"Bearer {token}"}
 
 
+def _hdr(token, org_id):
+    return {"Authorization": f"Bearer {token}", "X-Organization-Id": str(org_id)}
+
+
 async def _create_org(client, token, name="Acme"):
     resp = await client.post(
         "/api/v1/organizations", json={"name": name}, headers=_auth(token)
@@ -29,16 +33,21 @@ async def _create_org(client, token, name="Acme"):
 
 
 async def _create_agent(client, token, org_id, name="客服助手", **overrides):
-    payload = {"name": name, "provider": "openai", "model": "gpt-4o-mini", **overrides}
+    payload = {
+        "name": name,
+        "model_provider": "openai",
+        "model_name": "gpt-4o-mini",
+        **overrides,
+    }
     return await client.post(
-        f"/api/v1/organizations/{org_id}/agents", json=payload, headers=_auth(token)
+        "/api/v1/agents", json=payload, headers=_hdr(token, org_id)
     )
 
 
 # ---------- 创建与列表 ----------
 
 
-async def test_create_agent_and_list(client):
+async def test_create_agent_with_v1(client):
     await _register(client, "alice@test.com", "alice")
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
@@ -48,6 +57,7 @@ async def test_create_agent_and_list(client):
         token,
         org["id"],
         description="处理客户咨询",
+        avatar_url="https://example.com/a.png",
         system_prompt="你是一名客服。",
         temperature=0.7,
         max_tokens=2048,
@@ -56,65 +66,97 @@ async def test_create_agent_and_list(client):
     agent = resp.json()
     assert agent["name"] == "客服助手"
     assert agent["status"] == "enabled"
-    assert agent["provider"] == "openai"
-    assert agent["model"] == "gpt-4o-mini"
-    assert agent["temperature"] == 0.7
-    assert agent["max_tokens"] == 2048
+    assert agent["avatar_url"] == "https://example.com/a.png"
     assert agent["created_by_username"] == "alice"
+    # 初始配置自动生成 v1 并发布
+    assert agent["current_version"] == 1
+    detail = agent["current_version_detail"]
+    assert detail["system_prompt"] == "你是一名客服。"
+    assert detail["model_provider"] == "openai"
+    assert detail["model_name"] == "gpt-4o-mini"
+    assert detail["temperature"] == 0.7
+    assert detail["max_tokens"] == 2048
     assert agent["created_at"] is not None
 
-    lst = await client.get(
-        f"/api/v1/organizations/{org['id']}/agents", headers=_auth(token)
-    )
+    lst = await client.get("/api/v1/agents", headers=_hdr(token, org["id"]))
     assert lst.status_code == 200
-    assert len(lst.json()) == 1
     item = lst.json()[0]
     assert item["name"] == "客服助手"
-    assert item["status"] == "enabled"
+    assert item["current_version"] == 1
 
-    detail = await client.get(
-        f"/api/v1/organizations/{org['id']}/agents/{agent['id']}",
-        headers=_auth(token),
+    detail_resp = await client.get(
+        f"/api/v1/agents/{agent['id']}", headers=_hdr(token, org["id"])
     )
-    assert detail.status_code == 200
-    assert detail.json()["system_prompt"] == "你是一名客服。"
+    assert detail_resp.status_code == 200
+    assert (
+        detail_resp.json()["current_version_detail"]["system_prompt"]
+        == "你是一名客服。"
+    )
 
 
 async def test_create_agent_validation(client):
     await _register(client, "alice@test.com", "alice")
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
-    url = f"/api/v1/organizations/{org['id']}/agents"
 
     assert (
         await client.post(
-            url, json={"name": "", "provider": "x", "model": "y"}, headers=_auth(token)
+            "/api/v1/agents",
+            json={"name": "", "model_provider": "x", "model_name": "y"},
+            headers=_hdr(token, org["id"]),
         )
     ).status_code == 422
     assert (
         await client.post(
-            url,
-            json={"name": "x" * 101, "provider": "x", "model": "y"},
-            headers=_auth(token),
-        )
-    ).status_code == 422
-    # temperature 越界 / max_tokens 越界 / 缺少 provider
-    assert (
-        await client.post(
-            url,
-            json={"name": "a", "provider": "x", "model": "y", "temperature": 3},
-            headers=_auth(token),
+            "/api/v1/agents",
+            json={"name": "x" * 101, "model_provider": "x", "model_name": "y"},
+            headers=_hdr(token, org["id"]),
         )
     ).status_code == 422
     assert (
         await client.post(
-            url,
-            json={"name": "a", "provider": "x", "model": "y", "max_tokens": 0},
-            headers=_auth(token),
+            "/api/v1/agents",
+            json={
+                "name": "a",
+                "model_provider": "x",
+                "model_name": "y",
+                "temperature": 3,
+            },
+            headers=_hdr(token, org["id"]),
         )
     ).status_code == 422
     assert (
-        await client.post(url, json={"name": "a", "model": "y"}, headers=_auth(token))
+        await client.post(
+            "/api/v1/agents",
+            json={
+                "name": "a",
+                "model_provider": "x",
+                "model_name": "y",
+                "max_tokens": 0,
+            },
+            headers=_hdr(token, org["id"]),
+        )
+    ).status_code == 422
+    # 缺 model_name
+    assert (
+        await client.post(
+            "/api/v1/agents",
+            json={"name": "a", "model_provider": "x"},
+            headers=_hdr(token, org["id"]),
+        )
+    ).status_code == 422
+    # 非法状态
+    assert (
+        await client.post(
+            "/api/v1/agents",
+            json={
+                "name": "a",
+                "model_provider": "x",
+                "model_name": "y",
+                "status": "paused",
+            },
+            headers=_hdr(token, org["id"]),
+        )
     ).status_code == 422
 
 
@@ -128,20 +170,18 @@ async def test_agent_name_conflict(client):
     assert resp.status_code == 409
     assert resp.json()["code"] == "AGENT_NAME_CONFLICT"
 
-    # 改名撞已有名称
+    # 改名撞名 409；改名为自身原名 200
     second = (await _create_agent(client, token, org["id"], name="翻译助手")).json()
     resp = await client.patch(
-        f"/api/v1/organizations/{org['id']}/agents/{second['id']}",
+        f"/api/v1/agents/{second['id']}",
         json={"name": "客服助手"},
-        headers=_auth(token),
+        headers=_hdr(token, org["id"]),
     )
     assert resp.status_code == 409
-
-    # 改名为自身原名不冲突
     resp = await client.patch(
-        f"/api/v1/organizations/{org['id']}/agents/{second['id']}",
+        f"/api/v1/agents/{second['id']}",
         json={"name": "翻译助手"},
-        headers=_auth(token),
+        headers=_hdr(token, org["id"]),
     )
     assert resp.status_code == 200
 
@@ -151,52 +191,89 @@ async def test_agent_list_filters(client):
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
     await _create_agent(client, token, org["id"], name="客服助手")
-    data_assistant = (
-        await _create_agent(client, token, org["id"], name="数据助手")
-    ).json()
-    url = f"/api/v1/organizations/{org['id']}/agents"
+    helper = (await _create_agent(client, token, org["id"], name="数据助手")).json()
 
-    # 名称模糊过滤
-    resp = await client.get(url, params={"name": "客服"}, headers=_auth(token))
+    resp = await client.get(
+        "/api/v1/agents", params={"name": "客服"}, headers=_hdr(token, org["id"])
+    )
     assert [a["name"] for a in resp.json()] == ["客服助手"]
 
-    # 状态过滤（先停用数据助手）
     await client.patch(
-        f"{url}/{data_assistant['id']}/status",
+        f"/api/v1/agents/{helper['id']}/status",
         json={"status": "disabled"},
-        headers=_auth(token),
+        headers=_hdr(token, org["id"]),
     )
-    resp = await client.get(url, params={"status": "disabled"}, headers=_auth(token))
+    resp = await client.get(
+        "/api/v1/agents", params={"status": "disabled"}, headers=_hdr(token, org["id"])
+    )
     assert [a["name"] for a in resp.json()] == ["数据助手"]
 
-    # 非法状态值
     assert (
-        await client.get(url, params={"status": "paused"}, headers=_auth(token))
+        await client.get(
+            "/api/v1/agents",
+            params={"status": "paused"},
+            headers=_hdr(token, org["id"]),
+        )
     ).status_code == 422
 
 
 async def test_agent_requires_auth(client):
-    assert (await client.get("/api/v1/organizations/1/agents")).status_code == 401
+    assert (await client.get("/api/v1/agents")).status_code == 401
+    assert (await client.post("/api/v1/agents", json={"name": "x"})).status_code == 401
+
+
+# ---------- 请求头组织隔离与权限 ----------
+
+
+async def test_header_isolation(client):
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+
+    # 缺失请求头 → 403
+    resp = await client.get("/api/v1/agents", headers=_auth(token))
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "FORBIDDEN"
+    # 非数字请求头 → 403
     assert (
-        await client.post("/api/v1/organizations/1/agents", json={"name": "x"})
-    ).status_code == 401
+        await client.get(
+            "/api/v1/agents",
+            headers={"Authorization": f"Bearer {token}", "X-Organization-Id": "abc"},
+        )
+    ).status_code == 403
+    # 组织不存在 → 404
+    resp = await client.get("/api/v1/agents", headers=_hdr(token, 999999))
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "ORGANIZATION_NOT_FOUND"
+    # 非成员 → 403 NOT_ORG_MEMBER
+    await _register(client, "bob@test.com", "bob")
+    bob_token = await _token(client, "bob@test.com")
+    resp = await client.get("/api/v1/agents", headers=_hdr(bob_token, org["id"]))
+    assert resp.status_code == 403
+    assert resp.json()["code"] == "NOT_ORG_MEMBER"
 
 
-# ---------- 权限与归属隔离 ----------
-
-
-async def test_non_member_forbidden(client):
+async def test_cross_org_agent_hidden(client):
     await _register(client, "alice@test.com", "alice")
     await _register(client, "bob@test.com", "bob")
     alice_token = await _token(client, "alice@test.com")
     bob_token = await _token(client, "bob@test.com")
-    org = await _create_org(client, bob_token)
+    org_a = await _create_org(client, alice_token)
+    org_b = await _create_org(client, bob_token, name="BobOrg")
+    agent_a = (await _create_agent(client, alice_token, org_a["id"])).json()
 
+    # 用 bob 的组织上下文访问 alice 的 agent → 404（不泄露存在性）
     resp = await client.get(
-        f"/api/v1/organizations/{org['id']}/agents", headers=_auth(alice_token)
+        f"/api/v1/agents/{agent_a['id']}", headers=_hdr(bob_token, org_b["id"])
     )
-    assert resp.status_code == 403
-    assert resp.json()["code"] == "NOT_ORG_MEMBER"
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "AGENT_NOT_FOUND"
+
+    # 不存在 id → 404
+    resp = await client.get(
+        "/api/v1/agents/999999", headers=_hdr(alice_token, org_a["id"])
+    )
+    assert resp.status_code == 404
 
 
 async def test_viewer_readonly(client):
@@ -211,118 +288,88 @@ async def test_viewer_readonly(client):
         headers=_auth(alice_token),
     )
     agent = (await _create_agent(client, alice_token, org["id"])).json()
-    url = f"/api/v1/organizations/{org['id']}/agents"
+    hdr = _hdr(carol_token, org["id"])
 
     # viewer 只读
-    assert (await client.get(url, headers=_auth(carol_token))).status_code == 200
+    assert (await client.get("/api/v1/agents", headers=hdr)).status_code == 200
     assert (
-        await client.get(f"{url}/{agent['id']}", headers=_auth(carol_token))
+        await client.get(f"/api/v1/agents/{agent['id']}", headers=hdr)
+    ).status_code == 200
+    assert (
+        await client.get(f"/api/v1/agents/{agent['id']}/versions", headers=hdr)
     ).status_code == 200
     # viewer 管理操作全部 403
     assert (
         await client.post(
-            url,
-            json={"name": "x", "provider": "x", "model": "y"},
-            headers=_auth(carol_token),
+            "/api/v1/agents",
+            json={"name": "x", "model_provider": "x", "model_name": "y"},
+            headers=hdr,
         )
     ).status_code == 403
     assert (
         await client.patch(
-            f"{url}/{agent['id']}", json={"name": "y"}, headers=_auth(carol_token)
+            f"/api/v1/agents/{agent['id']}", json={"name": "y"}, headers=hdr
         )
     ).status_code == 403
     assert (
         await client.patch(
-            f"{url}/{agent['id']}/status",
+            f"/api/v1/agents/{agent['id']}/status",
             json={"status": "disabled"},
-            headers=_auth(carol_token),
+            headers=hdr,
         )
     ).status_code == 403
     assert (
-        await client.delete(f"{url}/{agent['id']}", headers=_auth(carol_token))
+        await client.post(
+            f"/api/v1/agents/{agent['id']}/versions",
+            json={"model_provider": "x", "model_name": "y"},
+            headers=hdr,
+        )
+    ).status_code == 403
+    assert (
+        await client.post(
+            f"/api/v1/agents/{agent['id']}/versions/1/publish", headers=hdr
+        )
+    ).status_code == 403
+    assert (
+        await client.delete(f"/api/v1/agents/{agent['id']}", headers=hdr)
     ).status_code == 403
 
 
-async def test_agent_not_found_and_ownership(client):
-    await _register(client, "alice@test.com", "alice")
-    await _register(client, "bob@test.com", "bob")
-    alice_token = await _token(client, "alice@test.com")
-    bob_token = await _token(client, "bob@test.com")
-    org_a = await _create_org(client, alice_token)
-    org_b = await _create_org(client, bob_token, name="BobOrg")
-    agent_a = (await _create_agent(client, alice_token, org_a["id"])).json()
-
-    # 不存在的智能体
-    resp = await client.get(
-        f"/api/v1/organizations/{org_a['id']}/agents/999999", headers=_auth(alice_token)
-    )
-    assert resp.status_code == 404
-    assert resp.json()["code"] == "AGENT_NOT_FOUND"
-
-    # 他组织成员通过自己组织访问我的智能体 → 404（不泄露存在性）
-    resp = await client.get(
-        f"/api/v1/organizations/{org_b['id']}/agents/{agent_a['id']}",
-        headers=_auth(bob_token),
-    )
-    assert resp.status_code == 404
-    assert resp.json()["code"] == "AGENT_NOT_FOUND"
-
-    # 同组织内路径带他组织 agent_id → 404
-    resp = await client.get(
-        f"/api/v1/organizations/{org_a['id']}/agents/{agent_a['id']}",
-        headers=_auth(alice_token),
-    )
-    assert resp.status_code == 200
+# ---------- 基础信息编辑 / 启停 / 删除 ----------
 
 
-# ---------- 编辑 / 启停 / 删除 ----------
-
-
-async def test_update_agent(client):
+async def test_update_agent_basic_fields(client):
     await _register(client, "alice@test.com", "alice")
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
-    agent = (
-        await _create_agent(client, token, org["id"], temperature=0.5, max_tokens=1024)
-    ).json()
-    url = f"/api/v1/organizations/{org['id']}/agents/{agent['id']}"
+    agent = (await _create_agent(client, token, org["id"])).json()
+    url = f"/api/v1/agents/{agent['id']}"
+    hdr = _hdr(token, org["id"])
 
-    # 局部更新：只改 model 与 system_prompt，其余不动
     resp = await client.patch(
         url,
-        json={"model": "gpt-4o", "system_prompt": "新的提示词"},
-        headers=_auth(token),
+        json={"description": "新描述", "avatar_url": "https://example.com/b.png"},
+        headers=hdr,
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["model"] == "gpt-4o"
-    assert body["temperature"] == 0.5
-    assert body["max_tokens"] == 1024
-    assert body["system_prompt"] == "新的提示词"
+    assert body["description"] == "新描述"
+    assert body["avatar_url"] == "https://example.com/b.png"
+    # 基础信息编辑不影响版本配置
+    assert body["current_version"] == 1
 
-    # 可空字段传 null 表示清空；system_prompt 清空回退空串
+    # 可空字段传 null 清空
     resp = await client.patch(
-        url,
-        json={"description": None, "temperature": None, "system_prompt": None},
-        headers=_auth(token),
+        url, json={"description": None, "avatar_url": None}, headers=hdr
     )
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["description"] is None
-    assert body["temperature"] is None
-    assert body["system_prompt"] == ""
+    assert resp.json()["description"] is None
+    assert resp.json()["avatar_url"] is None
 
-    # 必填字段显式传 null → 422
-    resp = await client.patch(url, json={"name": None}, headers=_auth(token))
+    # 名称必填，显式 null → 422
+    resp = await client.patch(url, json={"name": None}, headers=hdr)
     assert resp.status_code == 422
     assert resp.json()["code"] == "AGENT_FIELD_REQUIRED"
-    resp = await client.patch(url, json={"provider": None}, headers=_auth(token))
-    assert resp.status_code == 422
-
-    # 空请求体：所有值保持不变
-    resp = await client.patch(url, json={}, headers=_auth(token))
-    assert resp.status_code == 200
-    assert resp.json()["model"] == "gpt-4o"
 
 
 async def test_set_status(client):
@@ -330,43 +377,119 @@ async def test_set_status(client):
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
     agent = (await _create_agent(client, token, org["id"])).json()
-    url = f"/api/v1/organizations/{org['id']}/agents/{agent['id']}/status"
+    url = f"/api/v1/agents/{agent['id']}/status"
+    hdr = _hdr(token, org["id"])
 
-    resp = await client.patch(url, json={"status": "disabled"}, headers=_auth(token))
+    resp = await client.patch(url, json={"status": "disabled"}, headers=hdr)
     assert resp.status_code == 200
     assert resp.json()["status"] == "disabled"
-
-    resp = await client.patch(url, json={"status": "enabled"}, headers=_auth(token))
-    assert resp.status_code == 200
+    resp = await client.patch(url, json={"status": "enabled"}, headers=hdr)
     assert resp.json()["status"] == "enabled"
-
     assert (
-        await client.patch(url, json={"status": "paused"}, headers=_auth(token))
+        await client.patch(url, json={"status": "paused"}, headers=hdr)
     ).status_code == 422
 
 
-async def test_delete_agent(client):
+async def test_delete_agent(client, db):
+    from sqlalchemy import func, select
+
+    from app.models import AgentVersion
+
     await _register(client, "alice@test.com", "alice")
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
     agent = (await _create_agent(client, token, org["id"])).json()
-    url = f"/api/v1/organizations/{org['id']}/agents"
+    hdr = _hdr(token, org["id"])
 
-    resp = await client.delete(f"{url}/{agent['id']}", headers=_auth(token))
+    resp = await client.delete(f"/api/v1/agents/{agent['id']}", headers=hdr)
     assert resp.status_code == 204
-    assert (await client.get(url, headers=_auth(token))).json() == []
+    assert (await client.get("/api/v1/agents", headers=hdr)).json() == []
     assert (
-        await client.get(f"{url}/{agent['id']}", headers=_auth(token))
+        await client.get(f"/api/v1/agents/{agent['id']}", headers=hdr)
+    ).status_code == 404
+
+    # 版本随外键级联清理
+    result = await db.execute(
+        select(func.count(AgentVersion.id)).where(AgentVersion.agent_id == agent["id"])
+    )
+    assert result.scalar_one() == 0
+
+
+# ---------- 版本管理（需求 3.4） ----------
+
+
+async def test_version_publish_rollback(client):
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = (await _create_agent(client, token, org["id"])).json()
+    hdr = _hdr(token, org["id"])
+    base = f"/api/v1/agents/{agent['id']}/versions"
+
+    # 创建 v2（不自动发布）
+    resp = await client.post(
+        base,
+        json={
+            "system_prompt": "v2 提示词",
+            "model_provider": "openai",
+            "model_name": "gpt-4o",
+        },
+        headers=hdr,
+    )
+    assert resp.status_code == 201
+    v2 = resp.json()
+    assert v2["version"] == 2
+    assert v2["created_by_username"] == "alice"
+
+    # 版本列表（新版本在前）
+    lst = await client.get(base, headers=hdr)
+    assert [v["version"] for v in lst.json()] == [2, 1]
+
+    # 创建后未发布：当前版本仍为 v1
+    detail = await client.get(f"/api/v1/agents/{agent['id']}", headers=hdr)
+    assert detail.json()["current_version"] == 1
+
+    # 发布 v2
+    resp = await client.post(f"{base}/{v2['id']}/publish", headers=hdr)
+    assert resp.status_code == 200
+    assert resp.json()["current_version"] == 2
+    assert resp.json()["current_version_detail"]["model_name"] == "gpt-4o"
+
+    # 回滚到 v1（v1 记录 id 取自创建响应，非自增主键 1）
+    v1_id = agent["current_version_detail"]["id"]
+    resp = await client.post(f"{base}/{v1_id}/rollback", headers=hdr)
+    assert resp.status_code == 200
+    assert resp.json()["current_version"] == 1
+
+    # 版本不存在 → 404
+    assert (await client.post(f"{base}/999999/publish", headers=hdr)).status_code == 404
+    assert (
+        await client.post(f"{base}/999999/rollback", headers=hdr)
     ).status_code == 404
 
 
-# ---------- 组织解散联动（D8） ----------
+async def test_version_not_found_and_cross_agent(client):
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent_a = (await _create_agent(client, token, org["id"], name="甲")).json()
+    agent_b = (await _create_agent(client, token, org["id"], name="乙")).json()
+    hdr = _hdr(token, org["id"])
+
+    # 用 B 的 agent_id 发布 A 的版本 → 404
+    resp = await client.post(
+        f"/api/v1/agents/{agent_b['id']}/versions/"
+        f"{agent_a['current_version_detail']['id']}/publish",
+        headers=hdr,
+    )
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "AGENT_VERSION_NOT_FOUND"
 
 
-async def test_dissolve_cascades_agents(client, db):
+async def test_dissolve_cascades_agents_and_versions(client, db):
     from sqlalchemy import func, select
 
-    from app.models import Agent
+    from app.models import Agent, AgentVersion
 
     await _register(client, "alice@test.com", "alice")
     token = await _token(client, "alice@test.com")
@@ -381,4 +504,6 @@ async def test_dissolve_cascades_agents(client, db):
     result = await db.execute(
         select(func.count(Agent.id)).where(Agent.organization_id == org["id"])
     )
+    assert result.scalar_one() == 0
+    result = await db.execute(select(func.count(AgentVersion.id)))
     assert result.scalar_one() == 0

@@ -116,7 +116,7 @@ org_id（由依赖从路径注入，handler 不重复声明）
 | `GET /organizations` | 200 `OrganizationListItem[]` | 登录 | 一次取成员关系（含 org/role）+ 批量 owner 用户名与成员数 |
 | `GET /organizations/{org_id}` | 200 `OrganizationDetail` | OrgCtx | my_role 来自 membership |
 | `PATCH /organizations/{org_id}` `{name}` | 200 | AdminCtx | — |
-| `DELETE /organizations/{org_id}` | 204 | OwnerCtx | 事务：先删全部智能体、再删成员关系、最后删组织（外键顺序，agent 模块 D8） |
+| `DELETE /organizations/{org_id}` | 204 | OwnerCtx | 事务：先删全部智能体（版本随外键级联）、再删成员关系、最后删组织（外键顺序，agent 模块 D10） |
 | `GET /organizations/{org_id}/members` `?email=` | 200 `MemberResponse[]` | OrgCtx | `selectinload(user, role)`；email 过滤用 `user_id IN (子查询)` |
 | `POST /organizations/{org_id}/members` `{email, role}` | 201 | AdminCtx | 见 2.5；role 由 `Literal["admin","member","viewer"]` 限定 |
 | `PATCH /organizations/{org_id}/members/{user_id}` `{role}` | 200 | AdminCtx | role=owner 即转让（见 2.5） |
@@ -232,7 +232,7 @@ RequireAuth
 **4.6 解散组织**
 
 1. Settings 输入组织名匹配 → 确认 → `DELETE /organizations/{id}`
-2. 后端：先删该组织全部智能体（agent 模块 D8）→ 再删成员关系 → 最后删组织 → commit
+2. 后端：先删该组织全部智能体（版本随外键级联，agent 模块 D10）→ 再删成员关系 → 最后删组织 → commit
 3. 前端 `setCurrentOrg(null)` → invalidate `['orgs','list']` + `['auth','me']` + removeQueries `['org', orgId]` → 跳 `/organizations`
 
 **4.7 组织切换（前端）**

@@ -121,3 +121,8 @@ class AgentNameConflict(AppError):
 class AgentFieldRequired(AppError):
     def __init__(self, field: str) -> None:
         super().__init__(422, "AGENT_FIELD_REQUIRED", f"{field}不能为空")
+
+
+class AgentVersionNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "AGENT_VERSION_NOT_FOUND", "智能体版本不存在")

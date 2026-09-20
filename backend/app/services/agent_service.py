@@ -1,12 +1,17 @@
 # services/agent_service.py
-# 智能体 CRUD 业务逻辑（组织存在/成员身份/角色兜底在 api/deps.require_org_role；
+# 智能体 CRUD 与版本管理业务逻辑（组织存在/成员身份/角色兜底在 api/deps.require_header_org_role；
 # 智能体归属（agent.organization_id == org.id）为本模块数据隔离的第二道闸）
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AgentFieldRequired, AgentNameConflict, AgentNotFound
-from app.models import Agent, Organization, User
+from app.core.exceptions import (
+    AgentFieldRequired,
+    AgentNameConflict,
+    AgentNotFound,
+    AgentVersionNotFound,
+)
+from app.models import Agent, AgentVersion, Organization, User
 from app.repositories.agent_repo import AgentRepository
 from app.schemas.agent import (
     AgentCreateRequest,
@@ -14,14 +19,9 @@ from app.schemas.agent import (
     AgentListItem,
     AgentStatusRequest,
     AgentUpdateRequest,
+    AgentVersionCreateRequest,
+    AgentVersionItem,
 )
-
-# 更新时不允许置空的必填字段（null 无意义；description 等可空字段传 null 表示清空）
-_REQUIRED_FIELDS = {
-    "name": "智能体名称",
-    "provider": "模型提供方",
-    "model": "模型名称",
-}
 
 
 class AgentService:
@@ -29,10 +29,12 @@ class AgentService:
         self.db = db
         self.repo = AgentRepository(db)
 
+    # ---------- Agent CRUD ----------
+
     async def create_agent(
         self, org: Organization, user: User, data: AgentCreateRequest
     ) -> AgentDetail:
-        """创建智能体（D1：名称组织内唯一，预查 + 唯一约束兜底）"""
+        """创建智能体：基础信息 + 初始配置自动生成 v1 并发布（需求 3.3 + 3.4 初始版本）"""
         if await self.repo.name_exists(org.id, data.name):
             raise AgentNameConflict()
         agent = await self.repo.create(
@@ -40,35 +42,57 @@ class AgentService:
                 organization_id=org.id,
                 name=data.name,
                 description=data.description,
-                system_prompt=data.system_prompt,
-                provider=data.provider,
-                model=data.model,
-                temperature=data.temperature,
-                max_tokens=data.max_tokens,
+                avatar_url=data.avatar_url,
+                status=data.status,
                 created_by=user.id,
             )
         )
+        version = await self.repo.create_version(
+            AgentVersion(
+                agent_id=agent.id,
+                version=1,
+                system_prompt=data.system_prompt,
+                model_provider=data.model_provider,
+                model_name=data.model_name,
+                temperature=data.temperature,
+                max_tokens=data.max_tokens,
+                config_json=data.config_json,
+                created_by=user.id,
+            )
+        )
+        agent.current_version_id = version.id
         try:
-            # refresh 取回 server_default 的 created_at / status；commit 兜底唯一约束冲突
+            # 显式 flush 落库 UPDATE（refresh 不保证触发 autoflush，勿依赖）；
+            # 随后 refresh 取回 server_default 的 created_at / updated_at / status；commit 兜底唯一约束冲突
+            await self.db.flush()
             await self.db.refresh(agent)
+            await self.db.refresh(version)
             await self.db.commit()
         except IntegrityError as exc:
             await self.db.rollback()
             raise AgentNameConflict() from exc
-        return await self._detail(agent)
+        return await self._detail(agent, version)
 
     async def list_agents(
         self, org: Organization, name: str | None, status: str | None
     ) -> list[AgentListItem]:
         agents = await self.repo.list_by_org(org.id, name, status)
+        version_numbers = await self._current_version_numbers(
+            [a.current_version_id for a in agents if a.current_version_id is not None]
+        )
         return [
             AgentListItem(
                 id=a.id,
                 name=a.name,
                 description=a.description,
-                provider=a.provider,
-                model=a.model,
+                avatar_url=a.avatar_url,
                 status=a.status,
+                current_version=(
+                    version_numbers.get(a.current_version_id)
+                    if a.current_version_id is not None
+                    else None
+                ),
+                created_at=a.created_at,
                 updated_at=a.updated_at,
             )
             for a in agents
@@ -76,12 +100,13 @@ class AgentService:
 
     async def get_agent(self, org: Organization, agent_id: int) -> AgentDetail:
         agent = await self._get_in_org(org, agent_id)
-        return await self._detail(agent)
+        version = await self._current_version(agent)
+        return await self._detail(agent, version)
 
     async def update_agent(
         self, org: Organization, agent_id: int, data: AgentUpdateRequest
     ) -> AgentDetail:
-        """编辑智能体：只更新已传字段（exclude_unset）；可空字段传 null 表示清空"""
+        """编辑基础信息（名称/描述/头像）；模型与提示词变更走版本流程（需求 3.3/3.4）"""
         agent = await self._get_in_org(org, agent_id)
         values = data.model_dump(exclude_unset=True)
         if "name" in values:
@@ -91,22 +116,12 @@ class AgentService:
                 org.id, values["name"]
             ):
                 raise AgentNameConflict()
-        for field in ("provider", "model"):
-            if field in values and values[field] is None:
-                raise AgentFieldRequired(_REQUIRED_FIELDS[field])
-        # system_prompt 列为 NOT NULL：清空语义为回退空串
-        if "system_prompt" in values and values["system_prompt"] is None:
-            values["system_prompt"] = ""
         for key, value in values.items():
             setattr(agent, key, value)
-        try:
-            await self.db.commit()
-            # onupdate=func.now() 使 updated_at 在 UPDATE 后过期，refresh 显式取回（async 下不能依赖懒加载）
-            await self.db.refresh(agent)
-        except IntegrityError as exc:
-            await self.db.rollback()
-            raise AgentNameConflict() from exc
-        return await self._detail(agent)
+        await self.db.commit()
+        # updated_at 带 onupdate，UPDATE 后过期属性需 refresh 取回（async 下不能依赖懒加载）
+        await self.db.refresh(agent)
+        return await self._detail(agent, await self._current_version(agent))
 
     async def set_status(
         self, org: Organization, agent_id: int, data: AgentStatusRequest
@@ -114,15 +129,68 @@ class AgentService:
         agent = await self._get_in_org(org, agent_id)
         agent.status = data.status
         await self.db.commit()
-        # 同上：refresh 取回 onupdate 后的 updated_at
         await self.db.refresh(agent)
-        return await self._detail(agent)
+        return await self._detail(agent, await self._current_version(agent))
 
     async def delete_agent(self, org: Organization, agent_id: int) -> None:
-        """删除智能体（D5：V1 硬删除，无关联数据）"""
+        """删除智能体（agent_versions 随外键 CASCADE 级联）"""
         agent = await self._get_in_org(org, agent_id)
         await self.repo.delete(agent)
         await self.db.commit()
+
+    # ---------- 版本管理（需求 3.4） ----------
+
+    async def list_versions(
+        self, org: Organization, agent_id: int
+    ) -> list[AgentVersionItem]:
+        agent = await self._get_in_org(org, agent_id)
+        versions = await self.repo.list_versions(agent_id=agent.id)
+        usernames = await self._usernames([v.created_by for v in versions])
+        return [self._version_item(v, usernames) for v in versions]
+
+    async def create_version(
+        self,
+        org: Organization,
+        agent_id: int,
+        user: User,
+        data: AgentVersionCreateRequest,
+    ) -> AgentVersionItem:
+        """创建新版本（不自动发布，发布走 publish 端点；版本号 = 当前最大 + 1）"""
+        agent = await self._get_in_org(org, agent_id)
+        next_number = await self.repo.next_version_number(agent.id)
+        version = await self.repo.create_version(
+            AgentVersion(
+                agent_id=agent.id,
+                version=next_number,
+                system_prompt=data.system_prompt,
+                model_provider=data.model_provider,
+                model_name=data.model_name,
+                temperature=data.temperature,
+                max_tokens=data.max_tokens,
+                config_json=data.config_json,
+                created_by=user.id,
+            )
+        )
+        try:
+            await self.db.refresh(version)
+            await self.db.commit()
+        except IntegrityError as exc:
+            # 并发创建同序号版本：唯一约束兜底
+            await self.db.rollback()
+            raise AgentVersionNotFound() from exc
+        return self._version_item(version, await self._usernames([user.id]))
+
+    async def publish_version(
+        self, org: Organization, agent_id: int, version_id: int
+    ) -> AgentDetail:
+        """发布版本：将目标版本设为当前版本（需求 3.4 publish）"""
+        return await self._set_current(org, agent_id, version_id)
+
+    async def rollback_version(
+        self, org: Organization, agent_id: int, version_id: int
+    ) -> AgentDetail:
+        """回滚版本：将当前版本指回目标历史版本（需求 3.4 rollback，与 publish 同机制）"""
+        return await self._set_current(org, agent_id, version_id)
 
     # ---------- 内部 ----------
 
@@ -133,22 +201,69 @@ class AgentService:
             raise AgentNotFound()
         return agent
 
-    async def _detail(self, agent: Agent) -> AgentDetail:
+    async def _set_current(
+        self, org: Organization, agent_id: int, version_id: int
+    ) -> AgentDetail:
+        agent = await self._get_in_org(org, agent_id)
+        version = await self.repo.get_version(version_id)
+        if version is None or version.agent_id != agent.id:
+            raise AgentVersionNotFound()
+        agent.current_version_id = version.id
+        await self.db.commit()
+        await self.db.refresh(agent)
+        return await self._detail(agent, version)
+
+    async def _current_version(self, agent: Agent) -> AgentVersion | None:
+        if agent.current_version_id is None:
+            return None
+        return await self.repo.get_version(agent.current_version_id)
+
+    async def _current_version_numbers(self, version_ids: list[int]) -> dict[int, int]:
+        if not version_ids:
+            return {}
+        versions = await self.repo.list_versions(version_ids=set(version_ids))
+        return {v.id: v.version for v in versions}
+
+    async def _usernames(self, user_ids: list[int]) -> dict[int, str]:
+        if not user_ids:
+            return {}
         result = await self.db.execute(
-            select(User.username).where(User.id == agent.created_by)
+            select(User.id, User.username).where(User.id.in_(set(user_ids)))
         )
-        creator = result.scalar_one_or_none()
+        return {uid: username for uid, username in result.all()}
+
+    @staticmethod
+    def _version_item(
+        version: AgentVersion, usernames: dict[int, str]
+    ) -> AgentVersionItem:
+        return AgentVersionItem(
+            id=version.id,
+            version=version.version,
+            system_prompt=version.system_prompt,
+            model_provider=version.model_provider,
+            model_name=version.model_name,
+            temperature=version.temperature,
+            max_tokens=version.max_tokens,
+            config_json=version.config_json,
+            created_by_username=usernames.get(version.created_by, "未知用户"),
+            created_at=version.created_at,
+        )
+
+    async def _detail(self, agent: Agent, version: AgentVersion | None) -> AgentDetail:
+        usernames = await self._usernames(
+            [agent.created_by] + ([version.created_by] if version is not None else [])
+        )
         return AgentDetail(
             id=agent.id,
             name=agent.name,
             description=agent.description,
-            system_prompt=agent.system_prompt,
-            provider=agent.provider,
-            model=agent.model,
-            temperature=agent.temperature,
-            max_tokens=agent.max_tokens,
+            avatar_url=agent.avatar_url,
             status=agent.status,
-            created_by_username=creator if creator else "未知用户",
+            current_version=version.version if version is not None else None,
+            current_version_detail=(
+                self._version_item(version, usernames) if version is not None else None
+            ),
+            created_by_username=usernames.get(agent.created_by, "未知用户"),
             created_at=agent.created_at,
             updated_at=agent.updated_at,
         )

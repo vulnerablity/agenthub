@@ -1,5 +1,5 @@
 // api/agents.ts
-// 智能体接口封装：与后端 /api/v1/organizations/{orgId}/agents 对齐
+// 智能体接口封装：与后端 /api/v1/agents 对齐（组织隔离经 X-Organization-Id 请求头自动携带）
 import { http } from '@/utils/http'
 import type {
   AgentCreateRequest,
@@ -8,6 +8,8 @@ import type {
   AgentStatus,
   AgentStatusRequest,
   AgentUpdateRequest,
+  AgentVersionCreateRequest,
+  AgentVersionItem,
 } from '@/types'
 
 export interface AgentListParams {
@@ -16,25 +18,34 @@ export interface AgentListParams {
 }
 
 export const agentApi = {
-  create(orgId: number, data: AgentCreateRequest) {
-    return http.post<AgentDetail>(`/organizations/${orgId}/agents`, data)
+  create(data: AgentCreateRequest) {
+    return http.post<AgentDetail>('/agents', data)
   },
-  list(orgId: number, params?: AgentListParams) {
-    return http.get<AgentListItem[]>(`/organizations/${orgId}/agents`, { params })
+  list(params?: AgentListParams) {
+    return http.get<AgentListItem[]>('/agents', { params })
   },
-  get(orgId: number, agentId: number) {
-    return http.get<AgentDetail>(`/organizations/${orgId}/agents/${agentId}`)
+  get(agentId: number) {
+    return http.get<AgentDetail>(`/agents/${agentId}`)
   },
-  update(orgId: number, agentId: number, data: AgentUpdateRequest) {
-    return http.patch<AgentDetail>(`/organizations/${orgId}/agents/${agentId}`, data)
+  update(agentId: number, data: AgentUpdateRequest) {
+    return http.patch<AgentDetail>(`/agents/${agentId}`, data)
   },
-  setStatus(orgId: number, agentId: number, data: AgentStatusRequest) {
-    return http.patch<AgentDetail>(
-      `/organizations/${orgId}/agents/${agentId}/status`,
-      data,
-    )
+  setStatus(agentId: number, data: AgentStatusRequest) {
+    return http.patch<AgentDetail>(`/agents/${agentId}/status`, data)
   },
-  remove(orgId: number, agentId: number) {
-    return http.delete(`/organizations/${orgId}/agents/${agentId}`)
+  remove(agentId: number) {
+    return http.delete(`/agents/${agentId}`)
+  },
+  listVersions(agentId: number) {
+    return http.get<AgentVersionItem[]>(`/agents/${agentId}/versions`)
+  },
+  createVersion(agentId: number, data: AgentVersionCreateRequest) {
+    return http.post<AgentVersionItem>(`/agents/${agentId}/versions`, data)
+  },
+  publishVersion(agentId: number, versionId: number) {
+    return http.post<AgentDetail>(`/agents/${agentId}/versions/${versionId}/publish`)
+  },
+  rollbackVersion(agentId: number, versionId: number) {
+    return http.post<AgentDetail>(`/agents/${agentId}/versions/${versionId}/rollback`)
   },
 }

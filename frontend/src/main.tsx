@@ -10,7 +10,7 @@ import './index.css'
 import { router } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationStore } from '@/stores/organization'
-import { setOnUnauthorized } from '@/utils/http'
+import { setOnUnauthorized, setOrgIdProvider } from '@/utils/http'
 import { queryClient } from '@/utils/query-client'
 import { clearTokens } from '@/utils/token'
 
@@ -20,6 +20,15 @@ setOnUnauthorized(() => {
   queryClient.clear()
   useOrganizationStore.getState().setCurrentOrg(null)
   useAuthStore.getState().signOut()
+})
+
+// 组织上下文提供者：组织详情页以 URL 的 orgId 为准（唯一事实来源），其余页面回落 zustand 当前组织
+setOrgIdProvider(() => {
+  const match = window.location.pathname.match(/^\/organizations\/(\d+)/)
+  if (match) {
+    return Number(match[1])
+  }
+  return useOrganizationStore.getState().currentOrgId
 })
 
 createRoot(document.getElementById('root')!).render(

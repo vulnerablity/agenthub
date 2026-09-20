@@ -1,5 +1,5 @@
 // pages/agents/List.tsx
-// 智能体列表：搜索与状态过滤 + 卡片网格 + 新建入口；管理操作（启停/编辑）按角色矩阵渲染（后端为准）
+// 智能体列表：搜索与状态过滤 + 卡片网格（名称/当前版本/状态/创建时间）+ 新建入口；管理操作按角色矩阵渲染
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -30,26 +30,22 @@ export default function AgentList() {
   const { data: org } = useOrg(orgId)
   const [name, setName] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
-  const { data: agents, isPending } = useAgents(orgId, {
+  const filter = {
     name: name || undefined,
     status: status === 'all' ? undefined : status,
-  })
+  }
+  const { data: agents, isPending } = useAgents(orgId, filter)
   const [apiError, setApiError] = useState('')
 
   const canManage = canManageAgent(org?.my_role)
 
-  /** 启停/删除后刷新列表（queryKey 按当前过滤条件精确失效） */
+  /** 启停后刷新当前过滤条件下的列表缓存 */
   const refreshList = () =>
-    queryClient.invalidateQueries({
-      queryKey: agentsQueryKey(orgId ?? 0, {
-        name: name || undefined,
-        status: status === 'all' ? undefined : status,
-      }),
-    })
+    queryClient.invalidateQueries({ queryKey: agentsQueryKey(orgId ?? 0, filter) })
 
   const toggleStatus = useMutation({
     mutationFn: ({ agentId, status: next }: { agentId: number; status: AgentStatus }) =>
-      agentApi.setStatus(orgId!, agentId, { status: next }),
+      agentApi.setStatus(agentId, { status: next }),
     onSuccess: refreshList,
     onError: (error) => setApiError(errorMessage(error)),
   })
@@ -69,7 +65,7 @@ export default function AgentList() {
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">智能体管理</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            {org ? `${org.name} · 智能体配置与生命周期管理` : '加载中…'}
+            {org ? `${org.name} · 智能体配置、版本与生命周期管理` : '加载中…'}
           </p>
         </div>
         {canManage ? (
@@ -123,41 +119,53 @@ export default function AgentList() {
         <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {agents.map((agent) => {
             const isEnabled = agent.status === 'enabled'
-            const toggling = toggleStatus.isPending && toggleStatus.variables?.agentId === agent.id
+            const toggling =
+              toggleStatus.isPending && toggleStatus.variables?.agentId === agent.id
             return (
               <li
                 key={agent.id}
                 className="flex flex-col justify-between rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="truncate text-base font-semibold text-neutral-900">
-                      {agent.name}
-                    </h3>
-                    <span
-                      className={`shrink-0 rounded-full px-3 py-0.5 text-xs font-medium ${
-                        isEnabled
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-neutral-100 text-neutral-500'
-                      }`}
-                    >
-                      {AGENT_STATUS_LABELS[agent.status]}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    {agent.avatar_url ? (
+                      <img
+                        src={agent.avatar_url}
+                        alt=""
+                        className="h-9 w-9 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-700">
+                        {agent.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate text-base font-semibold text-neutral-900">
+                          {agent.name}
+                        </h3>
+                        <span
+                          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            isEnabled
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : 'bg-neutral-100 text-neutral-500'
+                          }`}
+                        >
+                          {AGENT_STATUS_LABELS[agent.status]}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-neutral-400">
+                        {agent.current_version != null
+                          ? `当前版本 v${agent.current_version}`
+                          : '暂无版本'}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-2 line-clamp-2 min-h-8 text-xs text-neutral-500">
+                  <p className="mt-3 line-clamp-2 min-h-8 text-xs text-neutral-500">
                     {agent.description || '暂无描述'}
                   </p>
                   <p className="mt-3 text-xs text-neutral-400">
-                    <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
-                      {agent.provider}
-                    </span>
-                    <span className="mx-1.5">/</span>
-                    <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
-                      {agent.model}
-                    </span>
-                  </p>
-                  <p className="mt-3 text-xs text-neutral-400">
-                    更新于 {new Date(agent.updated_at).toLocaleString('zh-CN')}
+                    创建于 {new Date(agent.created_at).toLocaleDateString('zh-CN')}
                   </p>
                 </div>
                 <div className="mt-4 flex items-center gap-2">

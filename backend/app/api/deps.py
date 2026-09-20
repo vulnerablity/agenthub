@@ -3,7 +3,7 @@
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Depends, Path
+from fastapi import Depends, Header, Path
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -97,6 +97,40 @@ def require_org_role(*allowed_roles: str):
         if membership is None:
             raise NotOrgMember()
         # role 为 lazy="joined"，随 membership 查询一并加载
+        if membership.role.name not in allowed_roles:
+            raise Forbidden()
+        return org, membership
+
+    return checker
+
+
+def require_header_org_role(*allowed_roles: str):
+    """组织作用域角色校验（顶层资源路径用）：组织 ID 取自 X-Organization-Id 请求头。
+
+    与 require_org_role 的区别仅在于组织来源：路径嵌套接口从 URL 注入，
+    顶层接口（如需求文档 3.3 的 /agents）从请求头注入，隔离与判权逻辑完全一致。
+    头缺失或非数字 → 403 FORBIDDEN（不泄露组织存在性）。
+    """
+
+    async def checker(
+        user: CurrentUser,
+        db: DbSession,
+        org_id_header: Annotated[str | None, Header(alias="X-Organization-Id")] = None,
+    ) -> tuple[Organization, OrganizationMember]:
+        if org_id_header is None or not org_id_header.isdigit():
+            raise Forbidden()
+        org = await db.get(Organization, int(org_id_header))
+        if org is None:
+            raise OrganizationNotFound()
+        result = await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == org.id,
+                OrganizationMember.user_id == user.id,
+            )
+        )
+        membership = result.scalar_one_or_none()
+        if membership is None:
+            raise NotOrgMember()
         if membership.role.name not in allowed_roles:
             raise Forbidden()
         return org, membership

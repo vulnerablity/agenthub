@@ -78,11 +78,12 @@ async def db(engine):
 async def _cleanup(engine):
     """每个用例结束后清空业务数据（保留预置的 roles）"""
     yield
-    from app.models import Agent, Organization, OrganizationMember, User
+    from app.models import Agent, AgentVersion, Organization, OrganizationMember, User
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        # Agent 外键指向 organizations，必须先清
+        # 外键顺序：版本 → 智能体 → 成员 → 组织 → 用户
+        await session.execute(delete(AgentVersion))
         await session.execute(delete(Agent))
         await session.execute(delete(OrganizationMember))
         await session.execute(delete(Organization))
