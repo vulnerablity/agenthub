@@ -103,3 +103,21 @@ class MemberManageForbidden(AppError):
 class SelfRoleChangeForbidden(AppError):
     def __init__(self) -> None:
         super().__init__(403, "SELF_ROLE_CHANGE_FORBIDDEN", "不能修改自己的角色")
+
+
+# 智能体域错误码（agent 模块）
+
+
+class AgentNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "AGENT_NOT_FOUND", "智能体不存在")
+
+
+class AgentNameConflict(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "AGENT_NAME_CONFLICT", "智能体名称已存在")
+
+
+class AgentFieldRequired(AppError):
+    def __init__(self, field: str) -> None:
+        super().__init__(422, "AGENT_FIELD_REQUIRED", f"{field}不能为空")
