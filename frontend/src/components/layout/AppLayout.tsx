@@ -2,7 +2,12 @@
 // 受保护区域布局：左侧常驻侧边栏（组织切换器 + 导航 + 用户）+ 右侧内容区 Outlet
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
-import { orgMembersPath, orgSettingsPath, ROUTE_PATHS } from '@/constants/routes'
+import {
+  agentsPath,
+  orgMembersPath,
+  orgSettingsPath,
+  ROUTE_PATHS,
+} from '@/constants/routes'
 import { useMe } from '@/hooks/useMe'
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationStore } from '@/stores/organization'
@@ -72,6 +77,15 @@ export default function AppLayout() {
           ) : (
             <NavLink to={orgMembersPath(currentOrgId)} className={navLinkClass}>
               成员管理
+            </NavLink>
+          )}
+          {orgNavDisabled ? (
+            <span className="cursor-not-allowed rounded-lg px-3 py-2 text-sm text-neutral-300">
+              智能体管理
+            </span>
+          ) : (
+            <NavLink to={agentsPath(currentOrgId)} className={navLinkClass}>
+              智能体管理
             </NavLink>
           )}
         </nav>

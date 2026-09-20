@@ -18,6 +18,7 @@ from app.core.exceptions import (
     UserNotFound,
 )
 from app.models import Organization, OrganizationMember, Role, User
+from app.repositories.agent_repo import AgentRepository
 from app.repositories.organization_repo import OrganizationRepository
 from app.repositories.user_repo import UserRepository
 from app.schemas.organization import (
@@ -36,6 +37,7 @@ class OrganizationService:
         self.db = db
         self.org_repo = OrganizationRepository(db)
         self.user_repo = UserRepository(db)
+        self.agent_repo = AgentRepository(db)
 
     # ---------- 组织 ----------
 
@@ -91,7 +93,8 @@ class OrganizationService:
         return await self._detail(org, membership.role.name)
 
     async def dissolve(self, org: Organization) -> None:
-        """解散：先清成员关系再删组织（遵守外键顺序）"""
+        """解散：先删智能体、再清成员关系、最后删组织（遵守外键顺序，设计文档 D8）"""
+        await self.agent_repo.delete_by_org(org.id)
         await self.org_repo.delete_memberships(org.id)
         await self.org_repo.delete(org)
         await self.db.commit()
