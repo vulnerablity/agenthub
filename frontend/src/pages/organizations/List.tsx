@@ -95,7 +95,7 @@ export default function OrganizationList() {
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-neutral-500">
-                  拥有者 {org.owner_username} · {org.member_count} 名成员
+                  企业拥有者 {org.owner_username} · {org.member_count} 名成员
                 </p>
               </div>
               <button
@@ -121,7 +121,7 @@ export default function OrganizationList() {
         className="mt-8 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
       >
         <h3 className="text-base font-semibold text-neutral-900">创建组织</h3>
-        <p className="mt-1 text-xs text-neutral-500">创建后您将成为组织拥有者</p>
+        <p className="mt-1 text-xs text-neutral-500">创建后您将成为该组织的企业拥有者</p>
         <div className="mt-4 flex items-end gap-3">
           <div className="flex-1">
             <TextField

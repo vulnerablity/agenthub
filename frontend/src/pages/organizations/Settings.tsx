@@ -138,7 +138,7 @@ export default function Settings() {
         <h3 className="text-base font-semibold text-neutral-900">基本信息</h3>
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
           <div>
-            <dt className="text-neutral-400">拥有者</dt>
+            <dt className="text-neutral-400">企业拥有者</dt>
             <dd className="mt-1 text-neutral-900">{org?.owner_username ?? '—'}</dd>
           </div>
           <div>
@@ -182,7 +182,7 @@ export default function Settings() {
           <div className="mt-4 border-t border-neutral-100 pt-5">
             <p className="text-sm font-medium text-neutral-900">转让组织</p>
             <p className="mt-1 text-xs text-neutral-500">
-              将拥有者角色转让给一名成员，您将变为管理员
+              将企业拥有者角色转让给一名成员，您将变为管理员
             </p>
             <div className="mt-3 flex items-center gap-3">
               <select
@@ -191,7 +191,7 @@ export default function Settings() {
                 className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               >
                 <option value="" disabled>
-                  选择新拥有者…
+                  选择新企业拥有者…
                 </option>
                 {transferable.map((m) => (
                   <option key={m.user_id} value={m.user_id}>

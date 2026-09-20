@@ -10,7 +10,19 @@
 - 组织：创建（创建者自动成为 owner 成员）、我的组织列表、组织详情、改名（owner/admin）、解散（owner）
 - 成员：成员列表（按邮箱模糊过滤）、添加已注册用户（owner/admin）、修改成员角色（owner/admin）、owner 转让（仅 owner）、移除成员（owner/admin）、本人退出（owner 除外）
 
-需求来源：需求文档 3.2 组织管理模块 + 4.2/4.3 数据表 + RBAC（V1 Roadmap：Organization & RBAC）。
+需求来源：`docs/需求文档 V1.0.md` 3.2 组织管理、2.1–2.4 用户角色、4.2/4.3 数据表、8 验收标准第 2 条（创建企业组织）。
+
+需求覆盖对照（以《需求文档 V1.0》为准）：
+
+| 需求条款 | 需求内容 | 实现 | 说明 |
+| --- | --- | --- | --- |
+| 3.2 | 创建组织 | `POST /api/v1/organizations` | 一致；创建者自动成为 owner（需求 2.3「Owner 创建组织」的落地：先有组织才有组织内角色） |
+| 3.2 | 添加成员 | `POST /api/v1/organizations/{org_id}/members` | 一致（仅支持已注册用户，见 D1） |
+| 3.2 | 删除成员 | `DELETE .../members/{user_id}`（+ 本人退出 `/me`） | 一致 |
+| 3.2 | 设置角色 | `PATCH .../members/{user_id}`（含转让） | 一致 |
+| 2.1–2.4 | 角色定义 | roles 预置 owner/admin/member/viewer | 一致；中文名统一：企业拥有者 / 管理员 / 普通用户 / 查看者 |
+| 4.2 / 4.3 | 数据表结构 | organizations / organization_members | 字段逐一对齐 |
+| 2.3 | Owner 管理全部资源 | 改名 / 解散 / 转让 / 退出 / 组织列表与详情（需求未列明细，属合理扩展） | 不冲突，保留 |
 
 产品决策（基线，改动需同步本文档）：
 
