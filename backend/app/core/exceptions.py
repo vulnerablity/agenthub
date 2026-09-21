@@ -126,3 +126,8 @@ class AgentFieldRequired(AppError):
 class AgentVersionNotFound(AppError):
     def __init__(self) -> None:
         super().__init__(404, "AGENT_VERSION_NOT_FOUND", "智能体版本不存在")
+
+
+class AgentVersionConflict(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "AGENT_VERSION_CONFLICT", "版本创建冲突，请重试")

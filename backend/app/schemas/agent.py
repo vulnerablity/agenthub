@@ -63,7 +63,7 @@ class AgentVersionCreateRequest(BaseModel):
 
 
 class AgentVersionItem(BaseModel):
-    """版本信息（需求 3.4 版本列表）"""
+    """版本信息（需求 3.4 版本列表；is_current 由 agents.current_version_id 计算，不落库）"""
 
     id: int
     version: int
@@ -75,6 +75,7 @@ class AgentVersionItem(BaseModel):
     config_json: dict[str, Any] | None
     created_by_username: str
     created_at: datetime
+    is_current: bool
 
 
 class AgentDetail(BaseModel):

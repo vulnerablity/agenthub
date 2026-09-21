@@ -65,6 +65,22 @@ def upgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
+
+    # 3. 存量数据回填：每个已有智能体将其配置快照为 v1 并设为当前版本（单一配置来源）
+    op.execute(
+        "INSERT INTO agent_versions "
+        "(agent_id, version, system_prompt, model_provider, model_name, "
+        " temperature, max_tokens, created_by) "
+        "SELECT id, 1, system_prompt, provider, model, "
+        "       temperature, max_tokens, created_by "
+        "FROM agents"
+    )
+    op.execute(
+        "UPDATE agents AS a "
+        "JOIN agent_versions AS v ON v.agent_id = a.id "
+        "SET a.current_version_id = v.id"
+    )
+
     op.drop_column("agents", "system_prompt")
     op.drop_column("agents", "provider")
     op.drop_column("agents", "model")

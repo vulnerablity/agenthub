@@ -62,7 +62,7 @@ backend/
 │  ├─ api/deps.py                  # 追加 require_header_org_role（X-Organization-Id 组织校验）
 │  ├─ api/v1/agents.py             # 10 个端点（顶层 prefix=/agents）
 │  ├─ api/v1/router.py             # 挂载 agents.router
-│  ├─ core/exceptions.py           # 追加 AgentNotFound / AgentNameConflict / AgentFieldRequired / AgentVersionNotFound
+│  ├─ core/exceptions.py           # 追加 AgentNotFound / AgentNameConflict / AgentFieldRequired / AgentVersionNotFound / AgentVersionConflict
 │  ├─ models/agent.py              # Agent（对齐需求 4.4）
 │  ├─ models/agent_version.py      # AgentVersion（对齐需求 4.5）
 │  ├─ models/__init__.py           # 追加导出 Agent / AgentVersion
@@ -134,10 +134,10 @@ X-Organization-Id 头缺失 / 非数字 → 403 FORBIDDEN（不泄露组织存�
 | `PATCH /agents/{agent_id}` `{name?, description?, avatar_url?}` | 200 `AgentDetail` | AdminCtx | 仅基础信息（D3）；可空字段 null 清空；name null → 422 |
 | `PATCH /agents/{agent_id}/status` `{status}` | 200 `AgentDetail` | AdminCtx | `Literal["enabled","disabled"]`；独立端点保持职责单一 |
 | `DELETE /agents/{agent_id}` | 204 | AdminCtx | 删 agent，版本随 DB 级联删除 |
-| `GET /agents/{agent_id}/versions` | 200 `AgentVersionItem[]` | OrgCtx | 按 version 倒序 |
-| `POST /agents/{agent_id}/versions` `{system_prompt, model_provider, model_name, temperature?, max_tokens?, config_json?}` | 201 `AgentVersionItem` | AdminCtx | 序号 = max(version)+1；不自动发布 |
-| `POST /agents/{agent_id}/versions/{version_id}/publish` | 200 `AgentDetail` | AdminCtx | 设 current_version_id 为目标版本 |
-| `POST /agents/{agent_id}/versions/{version_id}/rollback` | 200 `AgentDetail` | AdminCtx | 与 publish 同机制（指回历史版本） |
+| `GET /agents/{agent_id}/versions` | 200 `AgentVersionItem[]` | OrgCtx | 按 version 倒序；响应含计算字段 `is_current` |
+| `POST /agents/{agent_id}/versions` `{system_prompt, model_provider, model_name, temperature?, max_tokens?, config_json?}` | 201 `AgentVersionItem` | AdminCtx | 序号 = max(version)+1；不自动发布；agent 行锁 + 唯一约束兜底冲突重试 |
+| `POST /agents/{agent_id}/versions/{version_id}/publish` | 200 `AgentDetail` | AdminCtx | 行锁事务设 current_version_id 为目标版本 |
+| `POST /agents/{agent_id}/versions/{version_id}/rollback` | 200 `AgentDetail` | AdminCtx | 与 publish 同机制（指回历史版本，不产生新版本） |
 
 ### 2.5 服务层关键实现（维护时勿破坏）
 
@@ -146,8 +146,8 @@ X-Organization-Id 头缺失 / 非数字 → 403 FORBIDDEN（不泄露组织存�
 - **onupdate 取回**：`updated_at` 带 `onupdate=func.now()`，任何 UPDATE（编辑/启停/发布/回滚）提交后必须 `db.refresh(agent)`，否则过期属性在 async 上下文懒加载抛 `MissingGreenlet`
 - **名称唯一（D1）**：创建与改名前预查 + `IntegrityError` 兜底（并发）
 - **局部更新**：PATCH 用 `exclude_unset`；description / avatar_url 传 null 表示清空，name 传 null → 422 `AGENT_FIELD_REQUIRED`
-- **版本序号**：`next_version_number = max(version) + 1`，`uq_agent_version_seq` 兜底并发生成
-- **发布 / 回滚共用 `_set_current`**：校验版本归属 → 赋值 `agent.current_version_id` → commit → refresh
+- **版本序号（并发安全）**：`next_version_number = max(version) + 1`；创建版本前以 `FOR UPDATE` 行锁读取 agent 串行化并发，`uq_agent_version_seq` 兜底，撞约束回滚重试（最多 3 次），仍失败抛 409 `AGENT_VERSION_CONFLICT`
+- **发布 / 回滚共用 `_set_current`**：行锁读 agent → 校验版本归属 → 赋值 `agent.current_version_id` → commit → refresh；回滚不产生新版本
 - **组织解散联动（D10）**：`OrganizationService.dissolve` 先 `agent_repo.delete_by_org(org.id)`（versions 随 CASCADE），再删成员关系、再删组织
 
 ### 2.6 测试体系
@@ -288,6 +288,7 @@ RequireAuth
 | `AGENT_NAME_CONFLICT` | 409 | 创建 / 改名时名称在组织内已存在（预查 + 唯一约束兜底） | 后端 message（名称已存在） |
 | `AGENT_FIELD_REQUIRED` | 422 | PATCH 时 name 显式传 null | 后端 message（名称不能为空） |
 | `AGENT_VERSION_NOT_FOUND` | 404 | 版本不存在或不属于该 agent（发布/回滚路径） | 后端 message（智能体版本不存在） |
+| `AGENT_VERSION_CONFLICT` | 409 | 并发生成同序号版本，重试 3 次仍撞唯一约束 | 后端 message（版本创建冲突，请重试） |
 | （Pydantic 422） | 422 | 名称长度、temperature 越界、max_tokens 越界、status/model_provider/model_name 非法或缺省 | 前端 zod 先行拦截，透传后端 message |
 | 复用 `FORBIDDEN` | 403 | X-Organization-Id 缺失/非数字；member/viewer 管理操作（AdminCtx 不命中） | 后端 message |
 | 复用 `ORGANIZATION_NOT_FOUND` | 404 | 请求头组织不存在 | 后端 message |

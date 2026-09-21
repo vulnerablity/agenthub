@@ -76,6 +76,7 @@ async def test_create_agent_with_v1(client):
     assert detail["model_name"] == "gpt-4o-mini"
     assert detail["temperature"] == 0.7
     assert detail["max_tokens"] == 2048
+    assert detail["is_current"] is True
     assert agent["created_at"] is not None
 
     lst = await client.get("/api/v1/agents", headers=_hdr(token, org["id"]))
@@ -441,13 +442,15 @@ async def test_version_publish_rollback(client):
     assert v2["version"] == 2
     assert v2["created_by_username"] == "alice"
 
-    # 版本列表（新版本在前）
+    # 版本列表（新版本在前，is_current 由 current_version_id 计算）
     lst = await client.get(base, headers=hdr)
     assert [v["version"] for v in lst.json()] == [2, 1]
+    assert [v["is_current"] for v in lst.json()] == [False, True]
 
     # 创建后未发布：当前版本仍为 v1
     detail = await client.get(f"/api/v1/agents/{agent['id']}", headers=hdr)
     assert detail.json()["current_version"] == 1
+    assert detail.json()["current_version_detail"]["is_current"] is True
 
     # 发布 v2
     resp = await client.post(f"{base}/{v2['id']}/publish", headers=hdr)
@@ -455,11 +458,17 @@ async def test_version_publish_rollback(client):
     assert resp.json()["current_version"] == 2
     assert resp.json()["current_version_detail"]["model_name"] == "gpt-4o"
 
+    lst = await client.get(base, headers=hdr)
+    assert [v["is_current"] for v in lst.json()] == [True, False]
+
     # 回滚到 v1（v1 记录 id 取自创建响应，非自增主键 1）
     v1_id = agent["current_version_detail"]["id"]
     resp = await client.post(f"{base}/{v1_id}/rollback", headers=hdr)
     assert resp.status_code == 200
     assert resp.json()["current_version"] == 1
+
+    lst = await client.get(base, headers=hdr)
+    assert [v["is_current"] for v in lst.json()] == [False, True]
 
     # 版本不存在 → 404
     assert (await client.post(f"{base}/999999/publish", headers=hdr)).status_code == 404

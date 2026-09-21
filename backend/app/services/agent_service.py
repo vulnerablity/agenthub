@@ -9,6 +9,7 @@ from app.core.exceptions import (
     AgentFieldRequired,
     AgentNameConflict,
     AgentNotFound,
+    AgentVersionConflict,
     AgentVersionNotFound,
 )
 from app.models import Agent, AgentVersion, Organization, User
@@ -146,7 +147,10 @@ class AgentService:
         agent = await self._get_in_org(org, agent_id)
         versions = await self.repo.list_versions(agent_id=agent.id)
         usernames = await self._usernames([v.created_by for v in versions])
-        return [self._version_item(v, usernames) for v in versions]
+        return [
+            self._version_item(v, usernames, is_current=(v.id == agent.current_version_id))
+            for v in versions
+        ]
 
     async def create_version(
         self,
@@ -155,30 +159,35 @@ class AgentService:
         user: User,
         data: AgentVersionCreateRequest,
     ) -> AgentVersionItem:
-        """创建新版本（不自动发布，发布走 publish 端点；版本号 = 当前最大 + 1）"""
-        agent = await self._get_in_org(org, agent_id)
-        next_number = await self.repo.next_version_number(agent.id)
-        version = await self.repo.create_version(
-            AgentVersion(
-                agent_id=agent.id,
-                version=next_number,
-                system_prompt=data.system_prompt,
-                model_provider=data.model_provider,
-                model_name=data.model_name,
-                temperature=data.temperature,
-                max_tokens=data.max_tokens,
-                config_json=data.config_json,
-                created_by=user.id,
+        """创建新版本（不自动发布，发布走 publish 端点；版本号 = 当前最大 + 1）。
+
+        并发安全（修正 2）：事务内对 agent 行加 FOR UPDATE，同一智能体的并发创建被串行化；
+        UNIQUE(agent_id, version) 为数据库兜底，撞约束则回滚重试。
+        """
+        # 行冲突理论不可达（行锁已串行化），重试仅作唯一约束兜底
+        for _attempt in range(3):
+            agent = await self._get_in_org(org, agent_id, for_update=True)
+            next_number = await self.repo.next_version_number(agent.id)
+            version = await self.repo.create_version(
+                AgentVersion(
+                    agent_id=agent.id,
+                    version=next_number,
+                    system_prompt=data.system_prompt,
+                    model_provider=data.model_provider,
+                    model_name=data.model_name,
+                    temperature=data.temperature,
+                    max_tokens=data.max_tokens,
+                    config_json=data.config_json,
+                    created_by=user.id,
+                )
             )
-        )
-        try:
-            await self.db.refresh(version)
-            await self.db.commit()
-        except IntegrityError as exc:
-            # 并发创建同序号版本：唯一约束兜底
-            await self.db.rollback()
-            raise AgentVersionNotFound() from exc
-        return self._version_item(version, await self._usernames([user.id]))
+            try:
+                await self.db.commit()
+                await self.db.refresh(version)
+                return self._version_item(version, await self._usernames([user.id]))
+            except IntegrityError:
+                await self.db.rollback()
+        raise AgentVersionConflict()
 
     async def publish_version(
         self, org: Organization, agent_id: int, version_id: int
@@ -194,9 +203,18 @@ class AgentService:
 
     # ---------- 内部 ----------
 
-    async def _get_in_org(self, org: Organization, agent_id: int) -> Agent:
-        """归属校验：智能体不存在或不属于当前组织一律 404（不泄露跨组织存在性）"""
-        agent = await self.repo.get_by_id(agent_id)
+    async def _get_in_org(
+        self, org: Organization, agent_id: int, for_update: bool = False
+    ) -> Agent:
+        """归属校验：智能体不存在或不属于当前组织一律 404（不泄露跨组织存在性）。
+
+        for_update=True 时行锁读取（版本创建/发布/回滚事务边界，修正 2/4）。
+        """
+        agent = (
+            await self.repo.get_by_id_for_update(agent_id)
+            if for_update
+            else await self.repo.get_by_id(agent_id)
+        )
         if agent is None or agent.organization_id != org.id:
             raise AgentNotFound()
         return agent
@@ -204,7 +222,11 @@ class AgentService:
     async def _set_current(
         self, org: Organization, agent_id: int, version_id: int
     ) -> AgentDetail:
-        agent = await self._get_in_org(org, agent_id)
+        """发布/回滚共用事务骨架（修正 4/5）：锁 agent 行 → 校验版本归属 → 切换指针 → 提交。
+
+        回滚与发布同机制：仅更新 current_version_id，不产生新版本。
+        """
+        agent = await self._get_in_org(org, agent_id, for_update=True)
         version = await self.repo.get_version(version_id)
         if version is None or version.agent_id != agent.id:
             raise AgentVersionNotFound()
@@ -234,7 +256,7 @@ class AgentService:
 
     @staticmethod
     def _version_item(
-        version: AgentVersion, usernames: dict[int, str]
+        version: AgentVersion, usernames: dict[int, str], is_current: bool = False
     ) -> AgentVersionItem:
         return AgentVersionItem(
             id=version.id,
@@ -247,6 +269,7 @@ class AgentService:
             config_json=version.config_json,
             created_by_username=usernames.get(version.created_by, "未知用户"),
             created_at=version.created_at,
+            is_current=is_current,
         )
 
     async def _detail(self, agent: Agent, version: AgentVersion | None) -> AgentDetail:
@@ -261,7 +284,9 @@ class AgentService:
             status=agent.status,
             current_version=version.version if version is not None else None,
             current_version_detail=(
-                self._version_item(version, usernames) if version is not None else None
+                self._version_item(version, usernames, is_current=True)
+                if version is not None
+                else None
             ),
             created_by_username=usernames.get(agent.created_by, "未知用户"),
             created_at=agent.created_at,

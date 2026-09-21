@@ -15,6 +15,13 @@ class AgentRepository:
     async def get_by_id(self, agent_id: int) -> Agent | None:
         return await self.db.get(Agent, agent_id)
 
+    async def get_by_id_for_update(self, agent_id: int) -> Agent | None:
+        """行锁读取（SELECT ... FOR UPDATE）：版本创建/发布/回滚前串行化同一智能体的并发写"""
+        result = await self.db.execute(
+            select(Agent).where(Agent.id == agent_id).with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def create(self, agent: Agent) -> Agent:
         """新增智能体并 flush 拿到自增 id"""
         self.db.add(agent)
