@@ -101,9 +101,7 @@ class ConversationRepository:
         if agent_id is not None:
             stmt = stmt.where(Conversation.agent_id == agent_id)
         result = await self.db.execute(stmt)
-        return [
-            (row[0], row[1], row[2], row[3], row[4]) for row in result.all()
-        ]
+        return [(row[0], row[1], row[2], row[3], row[4]) for row in result.all()]
 
     # ---------- Message ----------
 

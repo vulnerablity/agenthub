@@ -212,9 +212,7 @@ class ChatService:
                     else:
                         usage = item.get("usage")
             except (LLMUpstreamError, LLMTimeout) as exc:
-                yield _sse(
-                    "error", SseErrorPayload(code=exc.code, message=exc.message)
-                )
+                yield _sse("error", SseErrorPayload(code=exc.code, message=exc.message))
                 return
 
             if not deltas:
@@ -353,9 +351,7 @@ class ChatService:
         )
 
     @staticmethod
-    def _conversation_detail(
-        conversation: Conversation, agent
-    ) -> ConversationDetail:
+    def _conversation_detail(conversation: Conversation, agent) -> ConversationDetail:
         return ConversationDetail(
             id=conversation.id,
             agent_id=agent.id,

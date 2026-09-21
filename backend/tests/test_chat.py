@@ -52,9 +52,7 @@ async def _create_agent(client, token, org_id, name="客服助手", **overrides)
         **overrides,
     }
     return (
-        await client.post(
-            "/api/v1/agents", json=payload, headers=_hdr(token, org_id)
-        )
+        await client.post("/api/v1/agents", json=payload, headers=_hdr(token, org_id))
     ).json()
 
 
@@ -168,8 +166,12 @@ async def test_org_isolation_and_private(client, monkeypatch):
         headers=_auth(alice),
     )
 
-    conv_a = (await _create_conversation(client, alice, org_a["id"], agent_a["id"])).json()
-    conv_b = (await _create_conversation(client, alice, org_b["id"], agent_b["id"])).json()
+    conv_a = (
+        await _create_conversation(client, alice, org_a["id"], agent_a["id"])
+    ).json()
+    conv_b = (
+        await _create_conversation(client, alice, org_b["id"], agent_b["id"])
+    ).json()
 
     # 列表按请求头组织过滤（chat.md D12）
     lst_a = await client.get("/api/v1/conversations", headers=_hdr(alice, org_a["id"]))
@@ -205,7 +207,10 @@ async def test_stream_success_persists(client, monkeypatch):
     monkeypatch.setattr(
         llm_module.LLMClient,
         "chat_stream",
-        _fake_chat(["你好", "，世界"], usage={"prompt_tokens": 9, "completion_tokens": 3, "total_tokens": 12}),
+        _fake_chat(
+            ["你好", "，世界"],
+            usage={"prompt_tokens": 9, "completion_tokens": 3, "total_tokens": 12},
+        ),
     )
     async with client.stream(
         "POST",
@@ -325,9 +330,7 @@ async def test_stream_concurrent_busy(client, db, monkeypatch):
     lock = ChatService._lock_for(conv["id"])
     await lock.acquire()
     try:
-        second = await client.post(
-            url, json={"content": "又来"}, headers=headers
-        )
+        second = await client.post(url, json={"content": "又来"}, headers=headers)
         assert second.status_code == 409
         assert second.json()["code"] == "CONVERSATION_BUSY"
     finally:
@@ -361,7 +364,9 @@ async def test_stream_disconnect_releases_lock(client, db, monkeypatch):
     user = (
         await db.execute(select(User).where(User.email == "alice@test.com"))
     ).scalar_one()
-    org_obj = (await db.execute(select(Organization).where(Organization.id == org["id"]))).scalar_one()
+    org_obj = (
+        await db.execute(select(Organization).where(Organization.id == org["id"]))
+    ).scalar_one()
 
     service = ChatService(db)
     await service.prepare_stream(
