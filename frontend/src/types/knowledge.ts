@@ -64,4 +64,4 @@ export interface KnowledgeSearchResponse {
 }
 
 /** 对话引用来源（D11）：done.sources 与 messages.metadata_json.sources 同构 */
-export interface RAGSource extends SearchResultItem {}
+export type RAGSource = SearchResultItem

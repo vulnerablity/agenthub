@@ -93,6 +93,9 @@ export default function VersionForm() {
   // RAG 绑定（knowledge.md D11）：随版本快照保存，合并进 config_json 而非覆盖其它键
   const [selectedKbIds, setSelectedKbIds] = useState<number[]>([])
   const [ragTopK, setRagTopK] = useState(5)
+  // 上次已预填的版本 id：RAG 绑定数据加载后于渲染期同步预填（官方 adjust-state-during-render
+  // 模式，避免 effect 内 setState 的连锁渲染，react-hooks/set-state-in-effect）
+  const [loadedVersionId, setLoadedVersionId] = useState<number | null>(null)
 
   const {
     register,
@@ -104,7 +107,7 @@ export default function VersionForm() {
     defaultValues: EMPTY_FORM,
   })
 
-  // 基于当前版本预填，便于在现有配置上微调（含已有的知识库绑定）
+  // 基于当前版本预填（react-hook-form 的 reset 属库级表单更新，非 React setState）
   useEffect(() => {
     const current = agent?.current_version_detail
     if (current) {
@@ -115,11 +118,17 @@ export default function VersionForm() {
         maxTokens: current.max_tokens != null ? String(current.max_tokens) : '',
         systemPrompt: current.system_prompt,
       })
-      const binding = readRagBinding(current.config_json)
-      setSelectedKbIds(binding.kbIds)
-      setRagTopK(binding.topK)
     }
   }, [agent, reset])
+
+  // 渲染期同步 RAG 绑定预填（与上方表单 reset 同源触发，不在 effect 内 setState）
+  const currentVersion = agent?.current_version_detail
+  if (currentVersion && loadedVersionId !== currentVersion.id) {
+    setLoadedVersionId(currentVersion.id)
+    const binding = readRagBinding(currentVersion.config_json)
+    setSelectedKbIds(binding.kbIds)
+    setRagTopK(binding.topK)
+  }
 
   const submitMutation = useMutation({
     mutationFn: (values: VersionForm) =>

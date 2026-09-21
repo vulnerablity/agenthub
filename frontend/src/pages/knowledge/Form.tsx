@@ -1,6 +1,6 @@
 // pages/knowledge/Form.tsx
 // 知识库新建/编辑：新建含 chunk 参数（后不可改），编辑仅名称/描述（knowledge.md D7）
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { knowledgeApi } from '@/api'
@@ -27,13 +27,15 @@ export default function KnowledgeBaseForm() {
   const [chunkOverlap, setChunkOverlap] = useState(DEFAULT_CHUNK_OVERLAP)
   const [apiError, setApiError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // 上次已预填的知识库 id：编辑态数据加载后于渲染期同步预填（官方 adjust-state-during-render
+  // 模式，避免 effect 内 setState 的连锁渲染，react-hooks/set-state-in-effect）
+  const [loadedKbId, setLoadedKbId] = useState<number | null>(null)
 
-  useEffect(() => {
-    if (isEdit && existing) {
-      setName(existing.name)
-      setDescription(existing.description ?? '')
-    }
-  }, [isEdit, existing])
+  if (isEdit && existing && loadedKbId !== existing.id) {
+    setLoadedKbId(existing.id)
+    setName(existing.name)
+    setDescription(existing.description ?? '')
+  }
 
   if (orgId == null || Number.isNaN(orgId)) {
     return <p className="text-sm text-neutral-500">组织参数无效</p>
