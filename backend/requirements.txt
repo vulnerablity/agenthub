@@ -35,10 +35,13 @@ pydantic-settings==2.15.0 # .env 配置
 pydantic_core==2.46.5
 Pygments==2.21.0
 PyJWT==2.14.0 # JWT
+pypdf==6.19.0 # PDF 文本抽取（知识库模块）
 pytest==9.1.1 # 测试
 pytest-asyncio==1.4.0
 python-dotenv==1.2.3
+python-multipart==0.0.32 # multipart 文件上传（知识库模块）
 PyYAML==6.0.3
+qdrant-client==1.19.1 # 向量库（知识库模块）
 redis==8.1.0
 ruff==0.16.7 # Lint / Format
 SQLAlchemy==2.0.54 # ORM

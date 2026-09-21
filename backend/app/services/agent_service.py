@@ -5,15 +5,20 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pydantic import ValidationError
+
 from app.core.exceptions import (
     AgentFieldRequired,
     AgentNameConflict,
     AgentNotFound,
     AgentVersionConflict,
     AgentVersionNotFound,
+    KnowledgeBaseNotFound,
+    RAGConfigInvalid,
 )
 from app.models import Agent, AgentVersion, Organization, User
 from app.repositories.agent_repo import AgentRepository
+from app.repositories.knowledge_repo import KnowledgeRepository
 from app.schemas.agent import (
     AgentCreateRequest,
     AgentDetail,
@@ -23,6 +28,7 @@ from app.schemas.agent import (
     AgentVersionCreateRequest,
     AgentVersionItem,
 )
+from app.schemas.knowledge import RAGConfig
 
 
 class AgentService:
@@ -38,6 +44,7 @@ class AgentService:
         """创建智能体：基础信息 + 初始配置自动生成 v1 并发布（需求 3.3 + 3.4 初始版本）"""
         if await self.repo.name_exists(org.id, data.name):
             raise AgentNameConflict()
+        config_json = await self._normalize_rag_binding(org, data.config_json)
         agent = await self.repo.create(
             Agent(
                 organization_id=org.id,
@@ -57,7 +64,7 @@ class AgentService:
                 model_name=data.model_name,
                 temperature=data.temperature,
                 max_tokens=data.max_tokens,
-                config_json=data.config_json,
+                config_json=config_json,
                 created_by=user.id,
             )
         )
@@ -170,6 +177,7 @@ class AgentService:
         for _attempt in range(3):
             agent = await self._get_in_org(org, agent_id, for_update=True)
             next_number = await self.repo.next_version_number(agent.id)
+            config_json = await self._normalize_rag_binding(org, data.config_json)
             version = await self.repo.create_version(
                 AgentVersion(
                     agent_id=agent.id,
@@ -179,7 +187,7 @@ class AgentService:
                     model_name=data.model_name,
                     temperature=data.temperature,
                     max_tokens=data.max_tokens,
-                    config_json=data.config_json,
+                    config_json=config_json,
                     created_by=user.id,
                 )
             )
@@ -220,6 +228,35 @@ class AgentService:
         if agent is None or agent.organization_id != org.id:
             raise AgentNotFound()
         return agent
+
+    async def _normalize_rag_binding(
+        self, org: Organization, config_json: dict | None
+    ) -> dict | None:
+        """校验并规范化版本配置中的 RAG 绑定（knowledge.md D11，仅版本创建时生效的不可变快照）：
+
+        - 无 rag 键 → 原样返回（不启用 RAG）
+        - rag 键存在 → 结构校验（不合法 → 422 RAG_CONFIG_INVALID）→ knowledge_base_ids 去重
+          → 逐条校验 KB 存在且归属当前组织（跨组织/不存在 → 404 KB_NOT_FOUND，不泄露）
+          → 返回规范化副本（空数组等价禁用 RAG）
+        """
+        if not config_json or "rag" not in config_json:
+            return config_json
+        try:
+            rag = RAGConfig.model_validate(config_json["rag"])
+        except ValidationError as exc:
+            raise RAGConfigInvalid() from exc
+        kb_ids = list(dict.fromkeys(rag.knowledge_base_ids))
+        repo = KnowledgeRepository(self.db)
+        for kb_id in kb_ids:
+            kb = await repo.get_kb(kb_id)
+            if kb is None or kb.organization_id != org.id:
+                raise KnowledgeBaseNotFound()
+        normalized = dict(config_json)
+        normalized["rag"] = {
+            "knowledge_base_ids": kb_ids,
+            "rag_top_k": rag.rag_top_k,
+        }
+        return normalized
 
     async def _set_current(
         self, org: Organization, agent_id: int, version_id: int

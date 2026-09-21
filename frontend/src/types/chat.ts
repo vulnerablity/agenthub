@@ -1,5 +1,6 @@
 // types/chat.ts
 // 对话协议类型：与 backend/app/schemas/chat.py 一一对应（需求文档 3.5 / 4.11 / 4.12）
+import type { RAGSource } from './knowledge'
 export interface ConversationCreateRequest {
   agent_id: number
   title?: string | null
@@ -46,10 +47,11 @@ export interface MessageDetail {
   created_at: string
 }
 
-/** SSE done 事件载荷：LLM 空输出时 message_id 为 null（chat.md D13） */
+/** SSE done 事件载荷：LLM 空输出时 message_id 为 null（chat.md D13）；sources 为 RAG 引用来源（knowledge.md D11） */
 export interface SseDonePayload {
   message_id: number | null
   token_usage: TokenUsage | null
+  sources: RAGSource[]
 }
 
 /** SSE error 事件载荷：流中失败（流前失败走统一 JSON 错误） */

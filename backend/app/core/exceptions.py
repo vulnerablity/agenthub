@@ -169,3 +169,68 @@ class LLMUpstreamError(AppError):
 class LLMTimeout(AppError):
     def __init__(self) -> None:
         super().__init__(502, "LLM_TIMEOUT", "上游大模型调用超时")
+
+
+# 知识库域错误码（knowledge 模块）
+
+
+class KnowledgeBaseNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "KB_NOT_FOUND", "知识库不存在")
+
+
+class KnowledgeBaseNameConflict(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "KB_NAME_CONFLICT", "知识库名称已存在")
+
+
+class KnowledgeBaseFieldRequired(AppError):
+    def __init__(self, field: str) -> None:
+        super().__init__(422, "KB_FIELD_REQUIRED", f"{field}不能为空")
+
+
+class KnowledgeBaseProcessing(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            409, "KB_PROCESSING", "该知识库存在正在处理的文档，请等待处理完成后再删除"
+        )
+
+
+class DocumentNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "DOCUMENT_NOT_FOUND", "文档不存在")
+
+
+class DocumentProcessing(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "DOCUMENT_PROCESSING", "文档正在处理中，无法删除")
+
+
+class FileTypeNotSupported(AppError):
+    def __init__(self) -> None:
+        super().__init__(400, "FILE_TYPE_NOT_SUPPORTED", "仅支持 PDF、TXT、Markdown 文件")
+
+
+class FileTooLarge(AppError):
+    def __init__(self) -> None:
+        super().__init__(413, "FILE_TOO_LARGE", "文件大小超出限制")
+
+
+class FileEmpty(AppError):
+    def __init__(self) -> None:
+        super().__init__(400, "FILE_EMPTY", "文件内容为空")
+
+
+class EmbeddingUpstreamError(AppError):
+    def __init__(self) -> None:
+        super().__init__(502, "EMBEDDING_UPSTREAM_ERROR", "Embedding 上游调用失败")
+
+
+class VectorStoreError(AppError):
+    def __init__(self) -> None:
+        super().__init__(502, "VECTOR_STORE_ERROR", "向量库操作失败")
+
+
+class RAGConfigInvalid(AppError):
+    def __init__(self) -> None:
+        super().__init__(422, "RAG_CONFIG_INVALID", "知识库绑定配置不合法")

@@ -18,7 +18,7 @@ import { useConversation } from '@/hooks/useConversation'
 import { messagesQueryKey, useConversationMessages } from '@/hooks/useConversationMessages'
 import { useChatStream } from '@/hooks/useChatStream'
 import { useOrg } from '@/hooks/useOrg'
-import type { MessageDetail } from '@/types'
+import type { MessageDetail, RAGSource } from '@/types'
 
 /** 乐观追加用户消息用的本地占位（负数 id 与服务端记录区分） */
 function localUserMessage(content: string): MessageDetail {
@@ -211,6 +211,11 @@ export default function Chat() {
                       key={message.id}
                       role={message.role}
                       content={message.content}
+                      sources={
+                        message.role === 'assistant'
+                          ? (message.metadata_json?.sources as RAGSource[] | undefined)
+                          : undefined
+                      }
                     />
                   ))}
                   {streaming && streamAssistant != null ? (

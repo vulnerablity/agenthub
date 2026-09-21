@@ -13,6 +13,7 @@ import { PROVIDER_OPTIONS, canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import { agentDetailPath } from '@/constants/routes'
 import { useAgent } from '@/hooks/useAgent'
+import { useKnowledgeBases } from '@/hooks/useKnowledgeBases'
 import { useOrg } from '@/hooks/useOrg'
 import type { AgentVersionCreateRequest } from '@/types'
 
@@ -46,14 +47,35 @@ const EMPTY_FORM: VersionForm = {
   systemPrompt: '',
 }
 
-function buildPayload(values: VersionForm): AgentVersionCreateRequest {
+function buildPayload(
+  values: VersionForm,
+  configJson: Record<string, unknown> | null,
+): AgentVersionCreateRequest {
   return {
     model_provider: values.provider.trim(),
     model_name: values.modelName.trim(),
     temperature: values.temperature === '' ? null : Number(values.temperature),
     max_tokens: values.maxTokens === '' ? null : Number(values.maxTokens),
     system_prompt: values.systemPrompt,
+    config_json: configJson,
   }
+}
+
+/** 从版本 config_json 中读取 rag 绑定（兼容缺失/异常结构，knowledge.md D11） */
+function readRagBinding(configJson: Record<string, unknown> | null | undefined): {
+  kbIds: number[]
+  topK: number
+} {
+  const raw = configJson?.rag
+  if (raw == null || typeof raw !== 'object') {
+    return { kbIds: [], topK: 5 }
+  }
+  const rag = raw as { knowledge_base_ids?: unknown; rag_top_k?: unknown }
+  const kbIds = Array.isArray(rag.knowledge_base_ids)
+    ? rag.knowledge_base_ids.filter((v): v is number => typeof v === 'number')
+    : []
+  const topK = typeof rag.rag_top_k === 'number' ? rag.rag_top_k : 5
+  return { kbIds, topK }
 }
 
 export default function VersionForm() {
@@ -65,8 +87,12 @@ export default function VersionForm() {
   const queryClient = useQueryClient()
   const { data: org } = useOrg(orgId)
   const { data: agent } = useAgent(orgId, agentId)
+  const { data: kbList } = useKnowledgeBases(orgId)
   const canManage = canManageAgent(org?.my_role)
   const [apiError, setApiError] = useState('')
+  // RAG 绑定（knowledge.md D11）：随版本快照保存，合并进 config_json 而非覆盖其它键
+  const [selectedKbIds, setSelectedKbIds] = useState<number[]>([])
+  const [ragTopK, setRagTopK] = useState(5)
 
   const {
     register,
@@ -78,7 +104,7 @@ export default function VersionForm() {
     defaultValues: EMPTY_FORM,
   })
 
-  // 基于当前版本预填，便于在现有配置上微调
+  // 基于当前版本预填，便于在现有配置上微调（含已有的知识库绑定）
   useEffect(() => {
     const current = agent?.current_version_detail
     if (current) {
@@ -89,12 +115,21 @@ export default function VersionForm() {
         maxTokens: current.max_tokens != null ? String(current.max_tokens) : '',
         systemPrompt: current.system_prompt,
       })
+      const binding = readRagBinding(current.config_json)
+      setSelectedKbIds(binding.kbIds)
+      setRagTopK(binding.topK)
     }
   }, [agent, reset])
 
   const submitMutation = useMutation({
     mutationFn: (values: VersionForm) =>
-      agentApi.createVersion(agentId!, buildPayload(values)),
+      agentApi.createVersion(agentId!, {
+        ...buildPayload(values, {
+          // 合并原版本其它配置键，仅更新 rag（不覆盖自定义扩展字段，knowledge.md D11）
+          ...(agent?.current_version_detail?.config_json ?? {}),
+          rag: { knowledge_base_ids: selectedKbIds, rag_top_k: ragTopK },
+        }),
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['org', orgId, 'agent', agentId, 'versions'],
@@ -121,6 +156,12 @@ export default function VersionForm() {
     setApiError('')
     submitMutation.mutate(values)
   })
+
+  const toggleKb = (kbId: number) => {
+    setSelectedKbIds((prev) =>
+      prev.includes(kbId) ? prev.filter((id) => id !== kbId) : [...prev, kbId],
+    )
+  }
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -198,6 +239,50 @@ export default function VersionForm() {
               <p className="text-xs text-red-500">{errors.systemPrompt.message}</p>
             ) : null}
           </div>
+        </section>
+
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+          <h3 className="text-base font-semibold text-neutral-900">知识库（RAG）</h3>
+          <p className="mt-1 text-xs text-neutral-400">
+            绑定后对话将检索知识库片段作为参考资料并附引用来源；不勾选 = 不启用 RAG。绑定随版本快照保存（knowledge.md D11）。
+          </p>
+          {kbList && kbList.length > 0 ? (
+            <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {kbList.map((kb) => (
+                <li key={kb.id}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 transition hover:bg-neutral-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedKbIds.includes(kb.id)}
+                      onChange={() => toggleKb(kb.id)}
+                      className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="min-w-0 flex-1 truncate">{kb.name}</span>
+                    <span className="shrink-0 text-xs text-neutral-400">
+                      {kb.document_count} 文档
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 rounded-lg border border-dashed border-neutral-300 p-4 text-center text-xs text-neutral-400">
+              该组织暂无知识库，可先在「知识库」中创建并上传文档
+            </p>
+          )}
+          {selectedKbIds.length > 0 ? (
+            <div className="mt-4 w-40">
+              <TextField
+                label="检索条数（每个知识库）"
+                type="number"
+                min={1}
+                max={50}
+                value={ragTopK}
+                onChange={(e) => setRagTopK(Number(e.target.value))}
+                required
+              />
+            </div>
+          ) : null}
         </section>
 
         <div className="flex items-center gap-3">

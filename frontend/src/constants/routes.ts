@@ -14,6 +14,10 @@ export const ROUTE_PATHS = {
   AGENT_VERSION_NEW: '/organizations/:orgId/agents/:agentId/versions/new',
   CHAT: '/organizations/:orgId/chat',
   CHAT_CONVERSATION: '/organizations/:orgId/chat/:conversationId',
+  KNOWLEDGE_BASES: '/organizations/:orgId/knowledge-bases',
+  KNOWLEDGE_BASE_NEW: '/organizations/:orgId/knowledge-bases/new',
+  KNOWLEDGE_BASE_DETAIL: '/organizations/:orgId/knowledge-bases/:kbId',
+  KNOWLEDGE_BASE_EDIT: '/organizations/:orgId/knowledge-bases/:kbId/edit',
 } as const
 
 /** 生成带组织 id 的成员管理路径 */
@@ -65,4 +69,30 @@ export function chatConversationPath(
   conversationId: number | string,
 ): string {
   return `/organizations/${orgId}/chat/${conversationId}`
+}
+
+/** 生成带组织 id 的知识库列表路径 */
+export function knowledgeBasesPath(orgId: number | string): string {
+  return `/organizations/${orgId}/knowledge-bases`
+}
+
+/** 生成带组织 id 的新建知识库路径 */
+export function knowledgeBaseNewPath(orgId: number | string): string {
+  return `/organizations/${orgId}/knowledge-bases/new`
+}
+
+/** 生成带组织与知识库 id 的详情路径 */
+export function knowledgeBaseDetailPath(
+  orgId: number | string,
+  kbId: number | string,
+): string {
+  return `/organizations/${orgId}/knowledge-bases/${kbId}`
+}
+
+/** 生成带组织与知识库 id 的编辑路径 */
+export function knowledgeBaseEditPath(
+  orgId: number | string,
+  kbId: number | string,
+): string {
+  return `/organizations/${orgId}/knowledge-bases/${kbId}/edit`
 }

@@ -15,6 +15,9 @@ import Register from '@/pages/auth/Register'
 import OrganizationList from '@/pages/organizations/List'
 import Members from '@/pages/organizations/Members'
 import Settings from '@/pages/organizations/Settings'
+import KnowledgeBaseList from '@/pages/knowledge/List'
+import KnowledgeBaseForm from '@/pages/knowledge/Form'
+import KnowledgeBaseDetail from '@/pages/knowledge/Detail'
 import RequireAuth from './RequireAuth'
 
 export const router = createBrowserRouter([
@@ -38,6 +41,11 @@ export const router = createBrowserRouter([
           { path: ROUTE_PATHS.AGENT_VERSION_NEW, element: <VersionForm /> },
           { path: ROUTE_PATHS.CHAT, element: <Chat /> },
           { path: ROUTE_PATHS.CHAT_CONVERSATION, element: <Chat /> },
+          { path: ROUTE_PATHS.KNOWLEDGE_BASES, element: <KnowledgeBaseList /> },
+          // /knowledge-bases/new 必须声明在 /knowledge-bases/:kbId 之前（保持既有路由顺序约束）
+          { path: ROUTE_PATHS.KNOWLEDGE_BASE_NEW, element: <KnowledgeBaseForm /> },
+          { path: ROUTE_PATHS.KNOWLEDGE_BASE_DETAIL, element: <KnowledgeBaseDetail /> },
+          { path: ROUTE_PATHS.KNOWLEDGE_BASE_EDIT, element: <KnowledgeBaseForm /> },
         ],
       },
     ],
