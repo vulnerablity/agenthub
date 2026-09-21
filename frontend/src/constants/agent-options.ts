@@ -14,3 +14,8 @@ export const PROVIDER_OPTIONS = ['openai', 'anthropic', 'zhipu', 'deepseek'] as 
 export function canManageAgent(role: string | undefined): boolean {
   return role === 'owner' || role === 'admin'
 }
+
+/** 对话能力收敛：viewer 只读不可对话，其余角色可发起对话（后端为准，chat.md D8） */
+export function canChatAgent(role: string | undefined): boolean {
+  return role === 'owner' || role === 'admin' || role === 'member'
+}

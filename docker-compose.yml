@@ -59,6 +59,10 @@ services:
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-agenthub}:${MYSQL_PASSWORD:-change-me}@mysql:3306/${MYSQL_DATABASE:-agenthub}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      # LLM 网关（OpenAI 兼容协议，chat 模块）；在 .env 中配置实际地址与密钥
+      LLM_API_BASE: ${LLM_API_BASE:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
     ports:
       - "8000:8000"
     depends_on:

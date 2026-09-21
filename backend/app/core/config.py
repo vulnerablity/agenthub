@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # LLM（OpenAI 兼容协议；chat 模块，模型名由会话绑定的 Agent 版本决定）
+    LLM_API_BASE: str = ""
+    LLM_API_KEY: str = ""
+    LLM_TIMEOUT_SECONDS: int = 60
+    CHAT_HISTORY_LIMIT: int = 20
+
     # CORS（逗号分隔多个来源）
     CORS_ORIGINS: str = "http://localhost:5173"
 
