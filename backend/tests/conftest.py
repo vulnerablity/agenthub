@@ -82,6 +82,9 @@ async def _cleanup(engine):
         Agent,
         AgentVersion,
         Conversation,
+        Document,
+        DocumentChunk,
+        KnowledgeBase,
         Message,
         Organization,
         OrganizationMember,
@@ -90,11 +93,14 @@ async def _cleanup(engine):
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        # 外键顺序：消息 → 会话 → 版本 → 智能体 → 成员 → 组织 → 用户
+        # 外键顺序：消息 → 会话 → 版本 → 智能体 → 切块 → 文档 → 知识库 → 成员 → 组织 → 用户
         await session.execute(delete(Message))
         await session.execute(delete(Conversation))
         await session.execute(delete(AgentVersion))
         await session.execute(delete(Agent))
+        await session.execute(delete(DocumentChunk))
+        await session.execute(delete(Document))
+        await session.execute(delete(KnowledgeBase))
         await session.execute(delete(OrganizationMember))
         await session.execute(delete(Organization))
         await session.execute(delete(User))

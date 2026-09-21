@@ -5,6 +5,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   agentsPath,
   chatPath,
+  knowledgeBasesPath,
   orgMembersPath,
   orgSettingsPath,
   ROUTE_PATHS,
@@ -87,6 +88,15 @@ export default function AppLayout() {
           ) : (
             <NavLink to={agentsPath(currentOrgId)} className={navLinkClass}>
               智能体管理
+            </NavLink>
+          )}
+          {orgNavDisabled ? (
+            <span className="cursor-not-allowed rounded-lg px-3 py-2 text-sm text-neutral-300">
+              知识库
+            </span>
+          ) : (
+            <NavLink to={knowledgeBasesPath(currentOrgId)} className={navLinkClass}>
+              知识库
             </NavLink>
           )}
           {orgNavDisabled ? (

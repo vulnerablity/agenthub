@@ -4,6 +4,9 @@ from app.models.agent import Agent
 from app.models.agent_version import AgentVersion
 from app.models.base import Base
 from app.models.conversation import Conversation
+from app.models.document import Document
+from app.models.document_chunk import DocumentChunk
+from app.models.knowledge_base import KnowledgeBase
 from app.models.message import Message
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
@@ -15,6 +18,9 @@ __all__ = [
     "AgentVersion",
     "Base",
     "Conversation",
+    "Document",
+    "DocumentChunk",
+    "KnowledgeBase",
     "Message",
     "Organization",
     "OrganizationMember",

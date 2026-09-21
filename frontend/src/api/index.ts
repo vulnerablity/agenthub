@@ -3,4 +3,5 @@
 export { agentApi } from './agents'
 export { authApi } from './auth'
 export { conversationApi } from './conversations'
+export { knowledgeApi } from './knowledge'
 export { organizationApi } from './organizations'

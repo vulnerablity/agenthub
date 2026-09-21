@@ -47,8 +47,40 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: int = 60
     CHAT_HISTORY_LIMIT: int = 20
 
+    # 向量库（Qdrant；知识库模块，knowledge.md 2）
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str = ""
+
+    # Embedding（OpenAI 兼容 /embeddings；全局单模型，运行期固定不可切换，knowledge.md D2）
+    EMBEDDING_PROVIDER: str = "openai"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_BASE_URL: str = ""
+    EMBEDDING_BATCH_SIZE: int = 32
+
+    # 知识库存储与文档处理（knowledge.md 2）
+    UPLOAD_DIR: str = "./storage/uploads"
+    MAX_UPLOAD_SIZE_MB: int = 20
+    WORKER_CONCURRENCY: int = 2
+    DOCUMENT_PROCESSING_TIMEOUT: int = 300
+    RAG_DEFAULT_TOP_K: int = 5
+
     # CORS（逗号分隔多个来源）
     CORS_ORIGINS: str = "http://localhost:5173"
+
+    @property
+    def embedding_base_url(self) -> str:
+        """Embedding 网关未配置时回落 LLM 网关（knowledge.md D10）"""
+        return self.EMBEDDING_BASE_URL or self.LLM_API_BASE
+
+    @property
+    def embedding_api_key(self) -> str:
+        """Embedding 密钥未配置时回落 LLM 密钥（knowledge.md D10）"""
+        return self.EMBEDDING_API_KEY or self.LLM_API_KEY
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
     @property
     def database_url(self) -> str:
