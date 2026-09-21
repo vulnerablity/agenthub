@@ -26,12 +26,22 @@ export function setOnUnauthorized(handler: () => void): void {
   unauthorizedHandler = handler
 }
 
+/** 触发全局登出回调（供不受拦截器管理的请求复用，如 fetch SSE 流的 401） */
+export function triggerUnauthorized(): void {
+  unauthorizedHandler?.()
+}
+
 // 组织上下文提供者（main.tsx 装配：URL 中的 orgId 优先，回落 zustand currentOrgId）
 // 所有请求自动携带 X-Organization-Id 请求头，后端按此做顶层资源（/agents 等）的组织隔离
 let orgIdProvider: (() => number | null) | null = null
 
 export function setOrgIdProvider(provider: () => number | null): void {
   orgIdProvider = provider
+}
+
+/** 取当前组织上下文（供 fetch 型请求复用与 axios 拦截器一致的组织头装配逻辑） */
+export function getCurrentOrgId(): number | null {
+  return orgIdProvider?.() ?? null
 }
 
 /** 调用刷新接口；使用无拦截器的裸 axios 实例，避免递归进入响应拦截器 */

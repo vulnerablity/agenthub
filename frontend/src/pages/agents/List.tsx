@@ -4,11 +4,16 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { agentApi } from '@/api'
+import { agentApi, conversationApi } from '@/api'
 import TextField from '@/components/form/TextField'
-import { AGENT_STATUS_LABELS, canManageAgent } from '@/constants/agent-options'
+import { AGENT_STATUS_LABELS, canChatAgent, canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
-import { agentDetailPath, agentEditPath, agentNewPath } from '@/constants/routes'
+import {
+  agentDetailPath,
+  agentEditPath,
+  agentNewPath,
+  chatConversationPath,
+} from '@/constants/routes'
 import { agentsQueryKey, useAgents } from '@/hooks/useAgents'
 import { useOrg } from '@/hooks/useOrg'
 import type { AgentStatus } from '@/types'
@@ -38,6 +43,7 @@ export default function AgentList() {
   const [apiError, setApiError] = useState('')
 
   const canManage = canManageAgent(org?.my_role)
+  const canChat = canChatAgent(org?.my_role)
 
   /** 启停后刷新当前过滤条件下的列表缓存 */
   const refreshList = () =>
@@ -47,6 +53,14 @@ export default function AgentList() {
     mutationFn: ({ agentId, status: next }: { agentId: number; status: AgentStatus }) =>
       agentApi.setStatus(agentId, { status: next }),
     onSuccess: refreshList,
+    onError: (error) => setApiError(errorMessage(error)),
+  })
+
+  /** 从卡片发起对话：创建会话后跳转对话页 */
+  const startChat = useMutation({
+    mutationFn: async (agentId: number) =>
+      (await conversationApi.create({ agent_id: agentId })).data,
+    onSuccess: (created) => navigate(chatConversationPath(orgId!, created.id)),
     onError: (error) => setApiError(errorMessage(error)),
   })
 
@@ -169,6 +183,21 @@ export default function AgentList() {
                   </p>
                 </div>
                 <div className="mt-4 flex items-center gap-2">
+                  {canChat && isEnabled ? (
+                    <button
+                      type="button"
+                      disabled={startChat.isPending && startChat.variables === agent.id}
+                      onClick={() => {
+                        setApiError('')
+                        startChat.mutate(agent.id)
+                      }}
+                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {startChat.isPending && startChat.variables === agent.id
+                        ? '创建中…'
+                        : '对话'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => navigate(agentDetailPath(orgId, agent.id))}

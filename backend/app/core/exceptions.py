@@ -131,3 +131,41 @@ class AgentVersionNotFound(AppError):
 class AgentVersionConflict(AppError):
     def __init__(self) -> None:
         super().__init__(409, "AGENT_VERSION_CONFLICT", "版本创建冲突，请重试")
+
+
+# 对话域错误码（chat 模块）
+
+
+class ConversationNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "CONVERSATION_NOT_FOUND", "会话不存在")
+
+
+class AgentNotAvailable(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "AGENT_NOT_AVAILABLE", "智能体未启用或未发布版本")
+
+
+class ConversationBusy(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "CONVERSATION_BUSY", "会话正在生成回答，请稍候")
+
+
+class MessageContentRequired(AppError):
+    def __init__(self) -> None:
+        super().__init__(400, "MESSAGE_CONTENT_REQUIRED", "消息内容不能为空")
+
+
+class MessageContentTooLong(AppError):
+    def __init__(self) -> None:
+        super().__init__(400, "MESSAGE_CONTENT_TOO_LONG", "消息内容过长")
+
+
+class LLMUpstreamError(AppError):
+    def __init__(self) -> None:
+        super().__init__(502, "LLM_UPSTREAM_ERROR", "上游大模型调用失败")
+
+
+class LLMTimeout(AppError):
+    def __init__(self) -> None:
+        super().__init__(502, "LLM_TIMEOUT", "上游大模型调用超时")

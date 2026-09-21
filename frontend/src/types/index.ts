@@ -2,5 +2,6 @@
 // 类型层统一出口
 export * from './agent'
 export * from './auth'
+export * from './chat'
 export * from './http'
 export * from './organization'

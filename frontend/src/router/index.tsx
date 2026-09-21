@@ -9,6 +9,7 @@ import AgentDetail from '@/pages/agents/Detail'
 import AgentForm from '@/pages/agents/Form'
 import AgentList from '@/pages/agents/List'
 import VersionForm from '@/pages/agents/VersionForm'
+import Chat from '@/pages/chat/Chat'
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
 import OrganizationList from '@/pages/organizations/List'
@@ -35,6 +36,8 @@ export const router = createBrowserRouter([
           { path: ROUTE_PATHS.AGENT_DETAIL, element: <AgentDetail /> },
           { path: ROUTE_PATHS.AGENT_EDIT, element: <AgentForm /> },
           { path: ROUTE_PATHS.AGENT_VERSION_NEW, element: <VersionForm /> },
+          { path: ROUTE_PATHS.CHAT, element: <Chat /> },
+          { path: ROUTE_PATHS.CHAT_CONVERSATION, element: <Chat /> },
         ],
       },
     ],

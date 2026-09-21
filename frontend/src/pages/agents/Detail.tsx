@@ -4,13 +4,14 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import { agentApi } from '@/api'
-import { AGENT_STATUS_LABELS, canManageAgent } from '@/constants/agent-options'
+import { agentApi, conversationApi } from '@/api'
+import { AGENT_STATUS_LABELS, canChatAgent, canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import {
   agentEditPath,
   agentVersionNewPath,
   agentsPath,
+  chatConversationPath,
 } from '@/constants/routes'
 import { useAgent, useAgentVersions } from '@/hooks/useAgent'
 import { useOrg } from '@/hooks/useOrg'
@@ -29,6 +30,15 @@ export default function AgentDetail() {
   const [confirmName, setConfirmName] = useState('')
 
   const canManage = canManageAgent(org?.my_role)
+  const canChat = canChatAgent(org?.my_role)
+
+  /** 从详情页发起对话：创建会话后跳转对话页 */
+  const startChat = useMutation({
+    mutationFn: async () =>
+      (await conversationApi.create({ agent_id: agentId! })).data,
+    onSuccess: (created) => navigate(chatConversationPath(orgId!, created.id)),
+    onError: (error) => setApiError(errorMessage(error)),
+  })
 
   /** 版本流转后刷新详情、版本列表与列表页缓存 */
   const refreshAfterVersionChange = async () => {
@@ -139,6 +149,19 @@ export default function AgentDetail() {
             </p>
           </div>
         </div>
+        {canChat && isEnabled ? (
+          <button
+            type="button"
+            disabled={startChat.isPending}
+            onClick={() => {
+              setApiError('')
+              startChat.mutate()
+            }}
+            className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {startChat.isPending ? '…' : '开始对话'}
+          </button>
+        ) : null}
         {canManage ? (
           <div className="flex items-center gap-2">
             <button

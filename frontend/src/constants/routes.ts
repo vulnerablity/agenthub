@@ -12,6 +12,8 @@ export const ROUTE_PATHS = {
   AGENT_DETAIL: '/organizations/:orgId/agents/:agentId',
   AGENT_EDIT: '/organizations/:orgId/agents/:agentId/edit',
   AGENT_VERSION_NEW: '/organizations/:orgId/agents/:agentId/versions/new',
+  CHAT: '/organizations/:orgId/chat',
+  CHAT_CONVERSATION: '/organizations/:orgId/chat/:conversationId',
 } as const
 
 /** 生成带组织 id 的成员管理路径 */
@@ -50,4 +52,17 @@ export function agentVersionNewPath(
   agentId: number | string,
 ): string {
   return `/organizations/${orgId}/agents/${agentId}/versions/new`
+}
+
+/** 生成带组织 id 的对话页路径 */
+export function chatPath(orgId: number | string): string {
+  return `/organizations/${orgId}/chat`
+}
+
+/** 生成带组织与会话 id 的对话页路径 */
+export function chatConversationPath(
+  orgId: number | string,
+  conversationId: number | string,
+): string {
+  return `/organizations/${orgId}/chat/${conversationId}`
 }
