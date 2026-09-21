@@ -56,6 +56,7 @@ export interface AgentVersionItem {
   config_json: Record<string, unknown> | null
   created_by_username: string
   created_at: string
+  is_current: boolean
 }
 
 export interface AgentDetail {

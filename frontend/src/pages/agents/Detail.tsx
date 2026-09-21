@@ -247,7 +247,8 @@ export default function AgentDetail() {
         {versions && versions.length > 0 ? (
           <ul className="mt-4 divide-y divide-neutral-50">
             {versions.map((v) => {
-              const isCurrent = current != null && v.id === current.id
+              // 当前版本标记以后端 is_current 为准（由 current_version_id 计算，兜底比对当前版本 id）
+              const isCurrent = v.is_current || (current != null && v.id === current.id)
               // 未发布的更高序号版本 → 发布；历史版本 → 回滚（需求 3.4 语义映射）
               const isOlderThanCurrent =
                 agent.current_version != null && v.version < agent.current_version
