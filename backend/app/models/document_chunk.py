@@ -2,7 +2,15 @@
 # 文档切块表（对齐需求 4.10）：vector_id 指向 Qdrant point，删除时按点/按 document 过滤清理（knowledge.md D9）
 from typing import Any
 
-from sqlalchemy import JSON, BigInteger, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base

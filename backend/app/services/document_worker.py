@@ -6,7 +6,7 @@
 #   - 写库/写向量前二次确认 document / KB 仍存在（删除竞态防御，D9）
 #   - 任一环节异常 → 清理该文档向量点 → status=failed + error_message（不阻塞其它文档）
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import uuid4
 
@@ -127,7 +127,7 @@ class DocumentWorker:
             # 幂等重跑准备（重启恢复 / 失败重试共用，双写一致性）
             await repo.delete_chunks_by_document(doc.id)
             doc.status = "processing"
-            doc.processing_started_at = datetime.now()
+            doc.processing_started_at = datetime.now(UTC)
             doc.error_message = None
             await db.commit()
         try:

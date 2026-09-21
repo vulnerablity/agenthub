@@ -1,4 +1,4 @@
-﻿# tests/test_knowledge.py
+# tests/test_knowledge.py
 # 知识库接口集成测试：覆盖 KB CRUD / 组织隔离 / 上传校验 / 异步处理状态机 / 删除竞态 /
 # Embedding 模型一致性 / 双写失败清理 / 检索结构 / 权限矩阵 / 重启恢复（knowledge.md 6）
 import asyncio
@@ -278,7 +278,7 @@ async def test_upload_validation(client, monkeypatch):
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
     kb = await _create_kb(client, token, org["id"])
-    hdr = _hdr(token, org["id"])
+    # hdr = _hdr(token, org["id"])
 
     # 类型不支持
     resp = await _upload(client, token, org["id"], kb["id"], "a.docx", b"xx")
@@ -309,7 +309,7 @@ async def test_document_lifecycle_and_search(client, knowledge_env, db, engine):
 
     # 上传即返回 pending（异步处理，D4）
     resp = await _upload(
-        client, token, org["id"], kb["id"], "假期政策.txt", "员工满一年享受五天年假。".encode("utf-8")
+        client, token, org["id"], kb["id"], "假期政策.txt", "员工满一年享受五天年假。".encode()
     )
     assert resp.status_code == 201
     doc = resp.json()
@@ -390,7 +390,7 @@ async def test_embeddng_model_uses_kb_snapshot(client, knowledge_env, monkeypatc
 
     # 创建 KB 后模拟运行期配置漂移：全局配置被“切换”为另一模型
     monkeypatch.setattr(settings, "EMBEDDING_MODEL", "switched-model")
-    resp = await _upload(client, token, org["id"], kb["id"], "笔记.txt", "内容内容".encode("utf-8"))
+    resp = await _upload(client, token, org["id"], kb["id"], "笔记.txt", "内容内容".encode())
     assert resp.status_code == 201
     await _wait_status(engine, resp.json()["id"])
 
@@ -448,7 +448,7 @@ async def test_processing_blocks_delete(client, knowledge_env, db, engine):
     blocker = asyncio.Event()
     knowledge_env["blocker"] = blocker
     doc = (
-        await _upload(client, token, org["id"], kb["id"], "慢文档.txt", "慢处理文本".encode("utf-8"))
+        await _upload(client, token, org["id"], kb["id"], "慢文档.txt", "慢处理文本".encode())
     ).json()
     await _wait_status(engine, doc["id"], expect="processing")
     # 清空 app 会话事务与 identity map：worker 在独立会话置 processing，避免读到上传时的 pending 缓存
@@ -478,12 +478,12 @@ async def test_worker_second_confirm_cleanup(client, knowledge_env, db, engine):
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
     kb = await _create_kb(client, token, org["id"])
-    hdr = _hdr(token, org["id"])
+    # hdr = _hdr(token, org["id"])
 
     blocker = asyncio.Event()
     knowledge_env["blocker"] = blocker
     doc = (
-        await _upload(client, token, org["id"], kb["id"], "竞态.txt", "竞争文档".encode("utf-8"))
+        await _upload(client, token, org["id"], kb["id"], "竞态.txt", "竞争文档".encode())
     ).json()
     await _wait_status(engine, doc["id"], expect="processing")
 
@@ -521,7 +521,7 @@ async def test_viewer_member_permissions(client, knowledge_env, engine):
     await _add_member(client, alice, org["id"], "carol@test.com", role="viewer")
     kb = await _create_kb(client, alice, org["id"])
     doc = (
-        await _upload(client, alice, org["id"], kb["id"], "权限.txt", "成员只读".encode("utf-8"))
+        await _upload(client, alice, org["id"], kb["id"], "权限.txt", "成员只读".encode())
     ).json()
     await _wait_status(engine, doc["id"])
 
@@ -574,7 +574,7 @@ async def test_recover_requeues_interrupted(client, knowledge_env, engine):
     worker = get_worker()
     await worker.stop()
     doc = (
-        await _upload(client, token, org["id"], kb["id"], "中断.txt", "中断恢复内容".encode("utf-8"))
+        await _upload(client, token, org["id"], kb["id"], "中断.txt", "中断恢复内容".encode())
     ).json()
     # 模拟“处理中崩溃”：直接把状态拨到 processing 后进程重启
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -607,7 +607,7 @@ async def test_cross_org_document_hidden(client, knowledge_env, engine):
     org_b = await _create_org(client, bob, name="B")
     kb = await _create_kb(client, alice, org_a["id"])
     doc = (
-        await _upload(client, alice, org_a["id"], kb["id"], "隔离.txt", "隔离内容".encode("utf-8"))
+        await _upload(client, alice, org_a["id"], kb["id"], "隔离.txt", "隔离内容".encode())
     ).json()
     await _wait_status(engine, doc["id"])
 

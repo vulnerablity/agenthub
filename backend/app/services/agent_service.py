@@ -1,11 +1,10 @@
 # services/agent_service.py
 # 智能体 CRUD 与版本管理业务逻辑（组织存在/成员身份/角色兜底在 api/deps.require_header_org_role；
 # 智能体归属（agent.organization_id == org.id）为本模块数据隔离的第二道闸）
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from pydantic import ValidationError
 
 from app.core.exceptions import (
     AgentFieldRequired,
