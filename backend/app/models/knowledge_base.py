@@ -44,6 +44,4 @@ class KnowledgeBase(Base):
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (
-        UniqueConstraint("organization_id", "name", name="uq_kb_name"),
-    )
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_kb_name"),)

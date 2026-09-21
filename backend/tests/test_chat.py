@@ -538,7 +538,9 @@ async def test_rag_retrieval_injected_with_sources(client, monkeypatch):
     )
     captured = []
     monkeypatch.setattr(
-        llm_module.LLMClient, "chat_stream", _fake_chat(["根据资料回答"], captured=captured)
+        llm_module.LLMClient,
+        "chat_stream",
+        _fake_chat(["根据资料回答"], captured=captured),
     )
     async with client.stream(
         "POST",

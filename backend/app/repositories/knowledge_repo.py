@@ -68,9 +68,7 @@ class KnowledgeRepository:
             .group_by(KnowledgeBase.id)
             .order_by(KnowledgeBase.updated_at.desc(), KnowledgeBase.id.desc())
         )
-        return [
-            (row[0], int(row[1] or 0), int(row[2] or 0)) for row in result.all()
-        ]
+        return [(row[0], int(row[1] or 0), int(row[2] or 0)) for row in result.all()]
 
     async def delete_kb(self, kb: KnowledgeBase) -> None:
         """删除知识库（documents 随外键 CASCADE 再级联 chunks，knowledge.md D9）"""
@@ -122,9 +120,7 @@ class KnowledgeRepository:
         if not document_ids:
             return {}
         result = await self.db.execute(
-            select(Document.id, Document.filename).where(
-                Document.id.in_(document_ids)
-            )
+            select(Document.id, Document.filename).where(Document.id.in_(document_ids))
         )
         return {doc_id: filename for doc_id, filename in result.all()}
 

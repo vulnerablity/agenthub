@@ -27,7 +27,9 @@ def upgrade() -> None:
         sa.Column("embedding_model", sa.String(length=100), nullable=False),
         sa.Column("chunk_size", sa.Integer(), server_default="500", nullable=False),
         sa.Column("chunk_overlap", sa.Integer(), server_default="50", nullable=False),
-        sa.Column("status", sa.String(length=20), server_default="active", nullable=False),
+        sa.Column(
+            "status", sa.String(length=20), server_default="active", nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -59,7 +61,9 @@ def upgrade() -> None:
         sa.Column("file_type", sa.String(length=20), nullable=False),
         sa.Column("file_size", sa.BigInteger(), nullable=False),
         sa.Column("storage_path", sa.String(length=500), nullable=False),
-        sa.Column("status", sa.String(length=20), server_default="pending", nullable=False),
+        sa.Column(
+            "status", sa.String(length=20), server_default="pending", nullable=False
+        ),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("processing_started_at", sa.DateTime(), nullable=True),
         sa.Column("chunk_count", sa.Integer(), server_default="0", nullable=False),
@@ -88,9 +92,7 @@ def upgrade() -> None:
         sa.Column("token_count", sa.Integer(), nullable=False),
         sa.Column("metadata_json", sa.JSON(), nullable=True),
         sa.Column("vector_id", sa.String(length=64), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["document_id"], ["documents.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["document_id"], ["documents.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("document_id", "chunk_index", name="uq_chunk_index"),
     )
@@ -104,7 +106,5 @@ def downgrade() -> None:
     op.drop_table("document_chunks")
     op.drop_index("ix_documents_kb_status", table_name="documents")
     op.drop_table("documents")
-    op.drop_index(
-        "ix_knowledge_bases_organization_id", table_name="knowledge_bases"
-    )
+    op.drop_index("ix_knowledge_bases_organization_id", table_name="knowledge_bases")
     op.drop_table("knowledge_bases")

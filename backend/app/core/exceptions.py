@@ -208,7 +208,9 @@ class DocumentProcessing(AppError):
 
 class FileTypeNotSupported(AppError):
     def __init__(self) -> None:
-        super().__init__(400, "FILE_TYPE_NOT_SUPPORTED", "仅支持 PDF、TXT、Markdown 文件")
+        super().__init__(
+            400, "FILE_TYPE_NOT_SUPPORTED", "仅支持 PDF、TXT、Markdown 文件"
+        )
 
 
 class FileTooLarge(AppError):

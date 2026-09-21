@@ -348,7 +348,11 @@ class ChatService:
                 response = await knowledge.search(
                     org, kb_id, SearchRequest(query=query, top_k=config.rag_top_k)
                 )
-            except (KnowledgeBaseNotFound, VectorStoreError, EmbeddingUpstreamError) as exc:
+            except (
+                KnowledgeBaseNotFound,
+                VectorStoreError,
+                EmbeddingUpstreamError,
+            ) as exc:
                 degraded = True
                 reason = reason or exc.code
                 continue

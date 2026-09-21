@@ -34,9 +34,7 @@ AdminCtx = Annotated[
 # ---------- 知识库 CRUD（需求 3.6 + 补充） ----------
 
 
-@router.post(
-    "/knowledge-bases", response_model=KnowledgeBaseDetail, status_code=201
-)
+@router.post("/knowledge-bases", response_model=KnowledgeBaseDetail, status_code=201)
 async def create_knowledge_base(
     data: KnowledgeBaseCreateRequest, ctx: AdminCtx, db: DbSession
 ) -> KnowledgeBaseDetail:
@@ -51,7 +49,9 @@ async def list_knowledge_bases(ctx: OrgCtx, db: DbSession) -> list[KnowledgeBase
 
 
 @router.get("/knowledge-bases/{kb_id}", response_model=KnowledgeBaseDetail)
-async def get_knowledge_base(kb_id: int, ctx: OrgCtx, db: DbSession) -> KnowledgeBaseDetail:
+async def get_knowledge_base(
+    kb_id: int, ctx: OrgCtx, db: DbSession
+) -> KnowledgeBaseDetail:
     org, _ = ctx
     return await KnowledgeService(db).get_kb(org, kb_id)
 
@@ -89,9 +89,7 @@ async def upload_document(
     )
 
 
-@router.get(
-    "/knowledge-bases/{kb_id}/documents", response_model=list[DocumentListItem]
-)
+@router.get("/knowledge-bases/{kb_id}/documents", response_model=list[DocumentListItem])
 async def list_kb_documents(
     kb_id: int, ctx: OrgCtx, db: DbSession
 ) -> list[DocumentListItem]:

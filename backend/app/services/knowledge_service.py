@@ -80,8 +80,7 @@ class KnowledgeService:
     async def list_kbs(self, org: Organization) -> list[KnowledgeBaseDetail]:
         rows = await self.repo.list_kb_with_counts(org.id)
         return [
-            self._kb_detail(kb, count, processing)
-            for kb, count, processing in rows
+            self._kb_detail(kb, count, processing) for kb, count, processing in rows
         ]
 
     async def get_kb(self, org: Organization, kb_id: int) -> KnowledgeBaseDetail:
@@ -215,7 +214,9 @@ class KnowledgeService:
             results.append(
                 SearchResultItem(
                     content=chunk.content if chunk is not None else "",
-                    document=filenames.get(payload.get(PAYLOAD_DOCUMENT_ID), "未知文档"),
+                    document=filenames.get(
+                        payload.get(PAYLOAD_DOCUMENT_ID), "未知文档"
+                    ),
                     page=payload.get(PAYLOAD_PAGE_START),
                     score=round(score, 4),
                 )

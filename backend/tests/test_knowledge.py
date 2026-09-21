@@ -177,7 +177,12 @@ async def test_create_kb_and_list(client):
     org = await _create_org(client, token)
 
     kb = await _create_kb(
-        client, token, org["id"], description="公司制度", chunk_size=400, chunk_overlap=40
+        client,
+        token,
+        org["id"],
+        description="公司制度",
+        chunk_size=400,
+        chunk_overlap=40,
     )
     assert kb["name"] == "员工手册"
     assert kb["description"] == "公司制度"
@@ -224,9 +229,7 @@ async def test_kb_isolation_and_404(client):
     ).status_code == 403
     # 非成员 → 403
     assert (
-        await client.get(
-            "/api/v1/knowledge-bases", headers=_hdr(bob, org_a["id"])
-        )
+        await client.get("/api/v1/knowledge-bases", headers=_hdr(bob, org_a["id"]))
     ).status_code == 403
     # 跨组织 → 404（不泄露存在性）
     resp = await client.get(
@@ -266,8 +269,12 @@ async def test_kb_update_and_delete(client):
     )
     assert resp.status_code == 409
 
-    assert (await client.delete(f"/api/v1/knowledge-bases/{second['id']}", headers=hdr)).status_code == 204
-    assert (await client.get("/api/v1/knowledge-bases", headers=hdr)).json()[0]["id"] == kb["id"]
+    assert (
+        await client.delete(f"/api/v1/knowledge-bases/{second['id']}", headers=hdr)
+    ).status_code == 204
+    assert (await client.get("/api/v1/knowledge-bases", headers=hdr)).json()[0][
+        "id"
+    ] == kb["id"]
 
 
 # ---------- 上传与异步处理 ----------
@@ -290,7 +297,9 @@ async def test_upload_validation(client, monkeypatch):
     assert resp.json()["code"] == "FILE_EMPTY"
     # 超大小（临时调低上限）
     monkeypatch.setattr(settings, "MAX_UPLOAD_SIZE_MB", 1)
-    resp = await _upload(client, token, org["id"], kb["id"], "a.txt", b"x" * (1024 * 1024 + 1))
+    resp = await _upload(
+        client, token, org["id"], kb["id"], "a.txt", b"x" * (1024 * 1024 + 1)
+    )
     assert resp.status_code == 413
     assert resp.json()["code"] == "FILE_TOO_LARGE"
     monkeypatch.setattr(settings, "MAX_UPLOAD_SIZE_MB", 20)
@@ -309,7 +318,12 @@ async def test_document_lifecycle_and_search(client, knowledge_env, db, engine):
 
     # 上传即返回 pending（异步处理，D4）
     resp = await _upload(
-        client, token, org["id"], kb["id"], "假期政策.txt", "员工满一年享受五天年假。".encode()
+        client,
+        token,
+        org["id"],
+        kb["id"],
+        "假期政策.txt",
+        "员工满一年享受五天年假。".encode(),
     )
     assert resp.status_code == 201
     doc = resp.json()
@@ -331,9 +345,7 @@ async def test_document_lifecycle_and_search(client, knowledge_env, db, engine):
     # 刷新 app 会话快照后，经 API 应看到 completed 状态与统计
     await db.rollback()
     docs = (
-        await client.get(
-            f"/api/v1/knowledge-bases/{kb['id']}/documents", headers=hdr
-        )
+        await client.get(f"/api/v1/knowledge-bases/{kb['id']}/documents", headers=hdr)
     ).json()
     assert len(docs) == 1 and docs[0]["status"] == "completed"
     api_status = (
@@ -379,7 +391,9 @@ async def test_document_lifecycle_and_search(client, knowledge_env, db, engine):
     assert search.json()["results"] == []
 
 
-async def test_embeddng_model_uses_kb_snapshot(client, knowledge_env, monkeypatch, engine):
+async def test_embeddng_model_uses_kb_snapshot(
+    client, knowledge_env, monkeypatch, engine
+):
     """Embedding 模型一致性（二轮评审 P0）：worker 用 KB 落库值，而非运行期全局配置（D2）"""
     await _register(client, "alice@test.com", "alice")
     token = await _token(client, "alice@test.com")
@@ -390,7 +404,9 @@ async def test_embeddng_model_uses_kb_snapshot(client, knowledge_env, monkeypatc
 
     # 创建 KB 后模拟运行期配置漂移：全局配置被“切换”为另一模型
     monkeypatch.setattr(settings, "EMBEDDING_MODEL", "switched-model")
-    resp = await _upload(client, token, org["id"], kb["id"], "笔记.txt", "内容内容".encode())
+    resp = await _upload(
+        client, token, org["id"], kb["id"], "笔记.txt", "内容内容".encode()
+    )
     assert resp.status_code == 201
     await _wait_status(engine, resp.json()["id"])
 
@@ -407,7 +423,9 @@ async def test_document_failed_marks_error(client, knowledge_env, db, engine):
     hdr = _hdr(token, org["id"])
 
     # 伪装成 pdf 的非法内容 → 解析失败 → failed + error_message（D6）
-    resp = await _upload(client, token, org["id"], kb["id"], "坏文件.pdf", b"not a real pdf")
+    resp = await _upload(
+        client, token, org["id"], kb["id"], "坏文件.pdf", b"not a real pdf"
+    )
     doc_id = resp.json()["id"]
     status = await _wait_status(engine, doc_id, expect="failed")
     assert status["error_message"]
@@ -448,7 +466,9 @@ async def test_processing_blocks_delete(client, knowledge_env, db, engine):
     blocker = asyncio.Event()
     knowledge_env["blocker"] = blocker
     doc = (
-        await _upload(client, token, org["id"], kb["id"], "慢文档.txt", "慢处理文本".encode())
+        await _upload(
+            client, token, org["id"], kb["id"], "慢文档.txt", "慢处理文本".encode()
+        )
     ).json()
     await _wait_status(engine, doc["id"], expect="processing")
     # 清空 app 会话事务与 identity map：worker 在独立会话置 processing，避免读到上传时的 pending 缓存
@@ -483,7 +503,9 @@ async def test_worker_second_confirm_cleanup(client, knowledge_env, db, engine):
     blocker = asyncio.Event()
     knowledge_env["blocker"] = blocker
     doc = (
-        await _upload(client, token, org["id"], kb["id"], "竞态.txt", "竞争文档".encode())
+        await _upload(
+            client, token, org["id"], kb["id"], "竞态.txt", "竞争文档".encode()
+        )
     ).json()
     await _wait_status(engine, doc["id"], expect="processing")
 
@@ -499,9 +521,13 @@ async def test_worker_second_confirm_cleanup(client, knowledge_env, db, engine):
         if doc["id"] in knowledge_env["deleted_docs"]:
             break
         await asyncio.sleep(0.1)
-    assert doc["id"] in knowledge_env["deleted_docs"]  # upsert 后二次确认发现已删 → 清理点
+    assert (
+        doc["id"] in knowledge_env["deleted_docs"]
+    )  # upsert 后二次确认发现已删 → 清理点
     count = await db.execute(
-        select(func.count(DocumentChunk.id)).where(DocumentChunk.document_id == doc["id"])
+        select(func.count(DocumentChunk.id)).where(
+            DocumentChunk.document_id == doc["id"]
+        )
     )
     assert count.scalar_one() == 0
 
@@ -521,13 +547,17 @@ async def test_viewer_member_permissions(client, knowledge_env, engine):
     await _add_member(client, alice, org["id"], "carol@test.com", role="viewer")
     kb = await _create_kb(client, alice, org["id"])
     doc = (
-        await _upload(client, alice, org["id"], kb["id"], "权限.txt", "成员只读".encode())
+        await _upload(
+            client, alice, org["id"], kb["id"], "权限.txt", "成员只读".encode()
+        )
     ).json()
     await _wait_status(engine, doc["id"])
 
     # member：只读可用（列表/详情/状态/检索），写操作 403
     bob_hdr = _hdr(bob, org["id"])
-    assert (await client.get("/api/v1/knowledge-bases", headers=bob_hdr)).status_code == 200
+    assert (
+        await client.get("/api/v1/knowledge-bases", headers=bob_hdr)
+    ).status_code == 200
     assert (
         await client.get(f"/api/v1/documents/{doc['id']}/status", headers=bob_hdr)
     ).status_code == 200
@@ -551,7 +581,9 @@ async def test_viewer_member_permissions(client, knowledge_env, engine):
 
     # viewer 同样只读
     carol_hdr = _hdr(carol, org["id"])
-    assert (await client.get("/api/v1/knowledge-bases", headers=carol_hdr)).status_code == 200
+    assert (
+        await client.get("/api/v1/knowledge-bases", headers=carol_hdr)
+    ).status_code == 200
     assert (
         await client.post(
             "/api/v1/knowledge-bases", json={"name": "越权"}, headers=carol_hdr
@@ -574,15 +606,15 @@ async def test_recover_requeues_interrupted(client, knowledge_env, engine):
     worker = get_worker()
     await worker.stop()
     doc = (
-        await _upload(client, token, org["id"], kb["id"], "中断.txt", "中断恢复内容".encode())
+        await _upload(
+            client, token, org["id"], kb["id"], "中断.txt", "中断恢复内容".encode()
+        )
     ).json()
     # 模拟“处理中崩溃”：直接把状态拨到 processing 后进程重启
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         await session.execute(
-            update(Document)
-            .where(Document.id == doc["id"])
-            .values(status="processing")
+            update(Document).where(Document.id == doc["id"]).values(status="processing")
         )
         await session.commit()
 
@@ -607,7 +639,9 @@ async def test_cross_org_document_hidden(client, knowledge_env, engine):
     org_b = await _create_org(client, bob, name="B")
     kb = await _create_kb(client, alice, org_a["id"])
     doc = (
-        await _upload(client, alice, org_a["id"], kb["id"], "隔离.txt", "隔离内容".encode())
+        await _upload(
+            client, alice, org_a["id"], kb["id"], "隔离.txt", "隔离内容".encode()
+        )
     ).json()
     await _wait_status(engine, doc["id"])
 
