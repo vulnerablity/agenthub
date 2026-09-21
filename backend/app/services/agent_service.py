@@ -148,7 +148,9 @@ class AgentService:
         versions = await self.repo.list_versions(agent_id=agent.id)
         usernames = await self._usernames([v.created_by for v in versions])
         return [
-            self._version_item(v, usernames, is_current=(v.id == agent.current_version_id))
+            self._version_item(
+                v, usernames, is_current=(v.id == agent.current_version_id)
+            )
             for v in versions
         ]
 
