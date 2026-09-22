@@ -8,6 +8,7 @@ import { useAgents } from '@/hooks/useAgents'
 import { useExecutions } from '@/hooks/useExecutions'
 import { useOrg } from '@/hooks/useOrg'
 import type { ExecutionStatus } from '@/types'
+import { formatDuration } from '@/pages/executions/utils'
 
 const PAGE_SIZE = 20
 
@@ -16,11 +17,7 @@ const STATUS_BADGES: Record<ExecutionStatus, { label: string; className: string 
   error: { label: '失败', className: 'bg-red-50 text-red-600' },
 }
 
-/** 毫秒耗时展示：<1s 显示 ms，否则秒保留两位 */
-export function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms} ms`
-  return `${(ms / 1000).toFixed(2)} s`
-}
+
 
 function formatTokens(n: number): string {
   return n.toLocaleString('zh-CN')

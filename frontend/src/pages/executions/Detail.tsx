@@ -7,7 +7,7 @@ import { useExecution } from '@/hooks/useExecutions'
 import { useOrg } from '@/hooks/useOrg'
 import type { ExecutionStep } from '@/types'
 
-import { formatDuration } from './List'
+import { formatDuration } from '@/pages/executions/utils'
 
 const STEP_TYPE_META: Record<string, { label: string; className: string }> = {
   llm: { label: 'LLM', className: 'bg-indigo-50 text-indigo-700' },
