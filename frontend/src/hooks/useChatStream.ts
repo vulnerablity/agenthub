@@ -4,7 +4,12 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { errorMessage } from '@/constants/error-messages'
-import type { SseDonePayload, SseErrorPayload } from '@/types'
+import type {
+  SseDonePayload,
+  SseErrorPayload,
+  SseToolCallPayload,
+  SseToolResultPayload,
+} from '@/types'
 import { postSse } from '@/utils/sse'
 
 interface UseChatStreamOptions {
@@ -15,6 +20,9 @@ interface UseChatStreamOptions {
   onDone: (payload: SseDonePayload) => void
   /** error 事件：流中失败 */
   onStreamError: (payload: SseErrorPayload) => void
+  /** tool_call / tool_result 事件：工具调用过程（tool-calling.md 3.5 chip 展示） */
+  onToolCall?: (payload: SseToolCallPayload) => void
+  onToolResult?: (payload: SseToolResultPayload) => void
 }
 
 export function useChatStream({
@@ -22,6 +30,8 @@ export function useChatStream({
   onDelta,
   onDone,
   onStreamError,
+  onToolCall,
+  onToolResult,
 }: UseChatStreamOptions) {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +57,8 @@ export function useChatStream({
             setStreaming(false)
             onStreamError(payload)
           },
+          onToolCall,
+          onToolResult,
         },
         controller.signal,
       ).catch((err: unknown) => {
@@ -56,7 +68,7 @@ export function useChatStream({
         setError(errorMessage(err))
       })
     },
-    [conversationId, streaming, onDelta, onDone, onStreamError],
+    [conversationId, streaming, onDelta, onDone, onStreamError, onToolCall, onToolResult],
   )
 
   const stop = useCallback(() => {

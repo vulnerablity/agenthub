@@ -27,12 +27,15 @@ class LLMClient:
     async def chat_stream(
         self,
         *,
-        messages: list[dict[str, str]],
+        messages: list[dict],
         model: str,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[dict]:
-        """逐条产出 {"delta": str}，收尾 {"usage": {...} | None}（上游不支持 usage 时为空）"""
+        """逐条产出：{"delta": str} 内容片段 / {"tool_calls": [...]} 该轮工具调用（如有）
+        / 收尾 {"usage": {...} | None}（上游不支持 usage 时为空）
+        tools 非空时启用 function calling（tool_choice=auto，tool-calling.md 2.5）"""
         payload: dict = {
             "model": model,
             "messages": messages,
@@ -43,6 +46,9 @@ class LLMClient:
             payload["temperature"] = temperature
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
         headers = {"Content-Type": "application/json"}
         if settings.LLM_API_KEY:
@@ -56,6 +62,7 @@ class LLMClient:
                 if resp.status_code != httpx.codes.OK:
                     raise LLMUpstreamError()
                 usage: dict | None = None
+                accumulators: dict[int, dict] = {}
                 async for line in resp.aiter_lines():
                     # OpenAI 兼容 SSE：data: 行承载 JSON 块，[DONE] 结束
                     if not line.startswith("data:"):
@@ -68,13 +75,21 @@ class LLMClient:
                     except json.JSONDecodeError:
                         continue
                     choices = chunk.get("choices") or []
-                    delta_content = (
-                        choices[0].get("delta", {}).get("content") if choices else None
-                    )
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    delta_content = delta.get("content")
                     if delta_content:
                         yield {"delta": delta_content}
+                    for part in delta.get("tool_calls") or []:
+                        _accumulate_tool_call(accumulators, part)
                     if chunk.get("usage"):
                         usage = chunk["usage"]
+                calls = [
+                    _finalize_tool_call(acc) for acc in accumulators.values()
+                ]
+                if calls:
+                    yield {"tool_calls": calls}
                 yield {"usage": usage}
         except httpx.TimeoutException as exc:
             raise LLMTimeout() from exc
@@ -83,6 +98,40 @@ class LLMClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+def _accumulate_tool_call(accumulators: dict[int, dict], part: dict) -> None:
+    """流式 tool_calls 按 index 聚合：id/name 取首个片段，arguments 为字符串碎片按序拼接"""
+    index = part.get("index", 0)
+    acc = accumulators.setdefault(
+        index, {"id": None, "name": None, "args_parts": [], "args_error": None}
+    )
+    if part.get("id"):
+        acc["id"] = part["id"]
+    fn = part.get("function") or {}
+    if fn.get("name"):
+        acc["name"] = fn["name"]
+    arguments = fn.get("arguments")
+    if arguments is not None:
+        acc["args_parts"].append(arguments)
+
+
+def _finalize_tool_call(acc: dict) -> dict:
+    """轮末组装：arguments 字符串整体 json.loads；解析失败记 error 占位（上层降级，D11）"""
+    raw = "".join(acc["args_parts"])
+    try:
+        arguments = json.loads(raw) if raw else {}
+        if not isinstance(arguments, dict):
+            raise ValueError("arguments 不是 JSON 对象")
+    except (json.JSONDecodeError, ValueError):
+        arguments = {}
+        acc["args_error"] = raw or "(空)"
+    return {
+        "id": acc["id"] or "",
+        "name": acc["name"] or "",
+        "arguments": arguments,
+        "args_error": acc["args_error"],
+    }
 
 
 _client: LLMClient | None = None

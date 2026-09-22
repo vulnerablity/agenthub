@@ -26,8 +26,10 @@ from app.core.exceptions import (
     VectorStoreError,
 )
 from app.integrations.llm import get_llm_client
+from app.integrations.tool_runners import ToolResult, run_tool, to_openai_tool
 from app.models import AgentVersion, Conversation, Message, Organization, User
 from app.repositories.conversation_repo import ConversationRepository
+from app.repositories.tool_repo import ToolRepository
 from app.schemas.chat import (
     ConversationCreateRequest,
     ConversationDetail,
@@ -36,11 +38,17 @@ from app.schemas.chat import (
     MessageDetail,
     SseDonePayload,
     SseErrorPayload,
+    SseToolCallPayload,
+    SseToolResultPayload,
 )
 from app.schemas.knowledge import RAGSource, SearchRequest, rag_config_from
+from app.schemas.tool import ToolCallRun
 from app.services.knowledge_service import KnowledgeService
 
 DEFAULT_TITLE = "新对话"
+
+# Tool Calling 循环上限（tool-calling.md D09）：防 LLM 反复索要工具导致死循环
+MAX_TOOL_ROUNDS = 5
 
 # RAG 注入模板：明确知识库内容不可信边界（knowledge.md D13），片段以 <knowledge_context> 包裹
 RAG_CONTEXT_PREFIX = (
@@ -56,16 +64,46 @@ class _StreamCtx:
 
     conversation: Conversation
     version: AgentVersion
-    llm_message: list[dict[str, str]]
+    llm_message: list[dict]
     user_content: str
     sources: list[RAGSource]
     rag_meta: dict[str, Any]
+    # 绑定的启用工具：tools 为 OpenAI 格式列表；tool_map 为 name → (type, effective_config)
+    # 纯数据结构，避免 ORM 对象在 commit 后过期（tool-calling.md 2.6）
+    tools: list[dict]
+    tool_map: dict[str, tuple[str, dict | None]]
 
 
 def _sse(event: str, payload: BaseModel | dict) -> str:
     """SSE 帧序列化：`event: xxx\\ndata: {...}\\n\\n`（非 ASCII 不转义）"""
     data = payload if isinstance(payload, dict) else payload.model_dump()
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _to_llm_tool_call(call: dict[str, Any]) -> dict[str, Any]:
+    """内部 tool_call → OpenAI 兼容 assistant.tool_calls 元素（arguments 必须为 JSON 字符串）"""
+    return {
+        "id": call["id"],
+        "type": "function",
+        "function": {
+            "name": call["name"],
+            "arguments": json.dumps(call["arguments"], ensure_ascii=False),
+        },
+    }
+
+
+def _merge_usage(
+    total: dict[str, Any] | None, current: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """多轮 token 汇总（tool-calling.md 2.6）：上游仅部分轮次带 usage，None 跳过、存在项求和"""
+    if current is None:
+        return total
+    merged = dict(total) if total else {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        value = current.get(key)
+        if isinstance(value, int):
+            merged[key] = merged.get(key, 0) + value
+    return merged or None
 
 
 class ChatService:
@@ -213,52 +251,56 @@ class ChatService:
         assert ctx is not None, "sse_events 必须先经 prepare_stream"
         lock = self._lock_for(ctx.conversation.id)
         try:
-            deltas: list[str] = []
-            usage: dict[str, Any] | None = None
+            done_sources = [source.model_dump() for source in ctx.sources]
             try:
-                async for item in get_llm_client().chat_stream(
-                    messages=ctx.llm_message,
-                    model=ctx.version.model_name,
-                    temperature=ctx.version.temperature,
-                    max_tokens=ctx.version.max_tokens,
-                ):
-                    if "delta" in item:
-                        deltas.append(item["delta"])
-                        yield _sse("message", {"delta": item["delta"]})
-                    else:
-                        usage = item.get("usage")
+                async for event, payload in self._agent_loop(ctx):
+                    if event == "message":
+                        yield _sse("message", {"delta": payload["delta"]})
+                    elif event == "tool_call":
+                        yield _sse("tool_call", SseToolCallPayload(**payload))
+                    elif event == "tool_result":
+                        yield _sse("tool_result", SseToolResultPayload(**payload))
+                    else:  # done
+                        content = payload["content"]
+                        if not content:
+                            # LLM 空输出（chat.md D13）：不落库 assistant 消息，done 置空
+                            # （引用来源与工具轨迹仍回传，knowledge.md D11 / tool-calling.md 2.7）
+                            yield _sse(
+                                "done",
+                                SseDonePayload(
+                                    message_id=None,
+                                    token_usage=None,
+                                    sources=done_sources,
+                                    tool_calls=[
+                                        ToolCallRun(**t) for t in payload["trace"]
+                                    ],
+                                ),
+                            )
+                            return
+                        assistant = await self._persist_assistant(
+                            ctx.conversation,
+                            ctx.user_content,
+                            content,
+                            payload["usage"],
+                            ctx.version,
+                            ctx.sources,
+                            ctx.rag_meta,
+                            payload["trace"],
+                            payload["max_rounds"],
+                        )
+                        yield _sse(
+                            "done",
+                            SseDonePayload(
+                                message_id=assistant.id,
+                                token_usage=payload["usage"],
+                                sources=done_sources,
+                                tool_calls=[ToolCallRun(**t) for t in payload["trace"]],
+                            ),
+                        )
+                        return
             except (LLMUpstreamError, LLMTimeout) as exc:
                 yield _sse("error", SseErrorPayload(code=exc.code, message=exc.message))
                 return
-
-            done_sources = [source.model_dump() for source in ctx.sources]
-            if not deltas:
-                # LLM 空输出（chat.md D13）：不落库 assistant 消息，done 置空（引用来源仍回传，D11）
-                yield _sse(
-                    "done",
-                    SseDonePayload(
-                        message_id=None, token_usage=None, sources=done_sources
-                    ),
-                )
-                return
-
-            assistant = await self._persist_assistant(
-                ctx.conversation,
-                ctx.user_content,
-                "".join(deltas),
-                usage,
-                ctx.version,
-                ctx.sources,
-                ctx.rag_meta,
-            )
-            yield _sse(
-                "done",
-                SseDonePayload(
-                    message_id=assistant.id,
-                    token_usage=usage,
-                    sources=done_sources,
-                ),
-            )
         finally:
             lock.release()
 
@@ -309,6 +351,8 @@ class ChatService:
             llm_message.append(
                 {"role": "system", "content": self._rag_context_prompt(sources)}
             )
+        # Tool 步骤（tool-calling.md 2.6）：实时加载启用绑定（D05），组装 OpenAI tools 与执行映射
+        tools, tool_map = await self._load_agent_tools(conversation.agent_id)
         llm_message += [{"role": m.role, "content": m.content} for m in history]
         llm_message.append({"role": "user", "content": content})
 
@@ -324,7 +368,25 @@ class ChatService:
             user_content=content,
             sources=sources,
             rag_meta=rag_meta,
+            tools=tools,
+            tool_map=tool_map,
         )
+
+    async def _load_agent_tools(
+        self, agent_id: int
+    ) -> tuple[list[dict], dict[str, tuple[str, dict | None]]]:
+        """加载 Agent 的启用工具（tool-calling.md D05）：过滤 enabled=false，
+        绑定级 config_json 覆盖工具默认 config（D08），纯数据返回不持有 ORM 对象"""
+        rows = await ToolRepository(self.db).list_bindings_with_tool(agent_id)
+        tools: list[dict] = []
+        tool_map: dict[str, tuple[str, dict | None]] = {}
+        for binding, tool in rows:
+            if not binding.enabled:
+                continue
+            tools.append(to_openai_tool(tool))
+            config = binding.config_json if binding.config_json is not None else tool.config
+            tool_map[tool.name] = (tool.type, config)
+        return tools, tool_map
 
     async def _retrieve_rag(
         self, org: Organization, version: AgentVersion, query: str
@@ -379,33 +441,131 @@ class ChatService:
             lines += f"[{index}] 《{source.document}》{page}\n{source.content}\n"
         return lines + RAG_CONTEXT_SUFFIX
 
+    async def _agent_loop(
+        self, ctx: _StreamCtx
+    ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+        """Tool Calling 循环（tool-calling.md 2.6，需求 5.1 第 6 步）：LLM 请求带 tools →
+        解析 tool_calls → 执行 → tool 消息回传 → 再问 LLM，至多 MAX_TOOL_ROUNDS 轮（D09）。
+        中间轮 assistant(tool_calls) / tool 消息仅进上下文不落库（D10）；
+        产出 ("message"/"tool_call"/"tool_result"/"done", payload)，由上层映射为 SSE 或同步结果"""
+        llm_message = ctx.llm_message
+        total_usage: dict[str, Any] | None = None
+        trace: list[dict[str, Any]] = []
+        partial_text = ""
+        for rnd in range(1, MAX_TOOL_ROUNDS + 1):
+            deltas: list[str] = []
+            calls: list[dict[str, Any]] = []
+            usage: dict[str, Any] | None = None
+            async for item in get_llm_client().chat_stream(
+                messages=llm_message,
+                model=ctx.version.model_name,
+                temperature=ctx.version.temperature,
+                max_tokens=ctx.version.max_tokens,
+                tools=ctx.tools or None,
+            ):
+                if "delta" in item:
+                    deltas.append(item["delta"])
+                    yield ("message", {"delta": item["delta"]})
+                elif "tool_calls" in item:
+                    calls = item["tool_calls"]
+                else:
+                    usage = item.get("usage")
+            total_usage = _merge_usage(total_usage, usage)
+            if not calls:
+                # LLM 不再索要工具 → 终答
+                yield (
+                    "done",
+                    {
+                        "content": "".join(deltas),
+                        "trace": trace,
+                        "usage": total_usage,
+                        "max_rounds": False,
+                    },
+                )
+                return
+            partial_text = "".join(deltas)
+            llm_message.append(
+                {
+                    "role": "assistant",
+                    "content": partial_text or None,
+                    "tool_calls": [_to_llm_tool_call(c) for c in calls],
+                }
+            )
+            for call in calls:
+                name = call["name"]
+                arguments = call["arguments"]
+                yield (
+                    "tool_call",
+                    {"round": rnd, "name": name, "arguments": arguments},
+                )
+                runner = ctx.tool_map.get(name)
+                if runner is None:
+                    result = ToolResult.failed(f"当前配置中不存在工具 {name}")
+                elif call.get("args_error"):
+                    result = ToolResult.failed(f"调用参数解析失败：{call['args_error']}")
+                else:
+                    # 错误不外抛（D11）：工具执行失败以 error 结果回传 LLM
+                    result = await run_tool(runner[0], runner[1], arguments)
+                trace.append(
+                    {
+                        "round": rnd,
+                        "name": name,
+                        "arguments": arguments,
+                        "status": result.status,
+                        "output": result.output,
+                        "error": result.error,
+                    }
+                )
+                yield (
+                    "tool_result",
+                    {
+                        "round": rnd,
+                        "name": name,
+                        "status": result.status,
+                        "output": result.output or result.error or "",
+                    },
+                )
+                llm_message.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call["id"],
+                        "content": result.output or result.error or "",
+                    }
+                )
+        # 超限：以当前部分文本终结（为空则占位提示），轨迹标记 max_rounds（D09）
+        yield (
+            "done",
+            {
+                "content": partial_text or "（已达工具调用轮次上限，请简化问题后重试）",
+                "trace": trace,
+                "usage": total_usage,
+                "max_rounds": True,
+            },
+        )
+
     async def _run_generation(
         self, org: Organization, conversation: Conversation, content: str
     ) -> MessageDetail:
-        """同步生成：复用 _build_context 后收集完整回答并落库（流式走 prepare_stream/sse_events）"""
+        """同步生成：复用 _build_context 后经 _agent_loop 收集完整回答并落库
+        （流式走 prepare_stream/sse_events，两条路径共用同一循环逻辑）"""
         ctx = await self._build_context(org, conversation, content)
-        deltas: list[str] = []
-        usage: dict[str, Any] | None = None
-        async for item in get_llm_client().chat_stream(
-            messages=ctx.llm_message,
-            model=ctx.version.model_name,
-            temperature=ctx.version.temperature,
-            max_tokens=ctx.version.max_tokens,
-        ):
-            if "delta" in item:
-                deltas.append(item["delta"])
-            else:
-                usage = item.get("usage")
-        if not deltas:
+        final: dict[str, Any] | None = None
+        async for event, payload in self._agent_loop(ctx):
+            if event == "done":
+                final = payload
+        assert final is not None
+        if not final["content"]:
             raise LLMUpstreamError()
         assistant = await self._persist_assistant(
             ctx.conversation,
             ctx.user_content,
-            "".join(deltas),
-            usage,
+            final["content"],
+            final["usage"],
             ctx.version,
             ctx.sources,
             ctx.rag_meta,
+            final["trace"],
+            final["max_rounds"],
         )
         return self._message_detail(assistant)
 
@@ -418,9 +578,11 @@ class ChatService:
         version: AgentVersion,
         sources: list[RAGSource],
         rag_meta: dict[str, Any],
+        tool_trace: list[dict[str, Any]],
+        tool_max_rounds: bool,
     ) -> Message:
         """助手消息一次性落库（D5）；首轮自动更新标题（D2）；updated_at 随行更新；
-        metadata 写入 RAG 引用与结构化降级信息（knowledge.md D11/D12，历史刷新可恢复引用展示）"""
+        metadata 写入 RAG 引用 / 工具调用轨迹（tool-calling.md 2.6，历史刷新可恢复展示）"""
         assistant = await self.repo.create_message(
             Message(
                 conversation_id=conversation.id,
@@ -433,6 +595,8 @@ class ChatService:
                     "agent_version_id": version.id,
                     "rag": rag_meta,
                     "sources": [source.model_dump() for source in sources],
+                    "tool_calls": tool_trace,
+                    "tool_calls_max_rounds": tool_max_rounds,
                 },
             )
         )

@@ -18,6 +18,9 @@ import Settings from '@/pages/organizations/Settings'
 import KnowledgeBaseList from '@/pages/knowledge/List'
 import KnowledgeBaseForm from '@/pages/knowledge/Form'
 import KnowledgeBaseDetail from '@/pages/knowledge/Detail'
+import ToolList from '@/pages/tools/List'
+import ToolForm from '@/pages/tools/Form'
+import ToolDetail from '@/pages/tools/Detail'
 import RequireAuth from './RequireAuth'
 
 export const router = createBrowserRouter([
@@ -46,6 +49,11 @@ export const router = createBrowserRouter([
           { path: ROUTE_PATHS.KNOWLEDGE_BASE_NEW, element: <KnowledgeBaseForm /> },
           { path: ROUTE_PATHS.KNOWLEDGE_BASE_DETAIL, element: <KnowledgeBaseDetail /> },
           { path: ROUTE_PATHS.KNOWLEDGE_BASE_EDIT, element: <KnowledgeBaseForm /> },
+          { path: ROUTE_PATHS.TOOLS, element: <ToolList /> },
+          // /tools/new 必须声明在 /tools/:toolId 之前（保持既有路由顺序约束）
+          { path: ROUTE_PATHS.TOOL_NEW, element: <ToolForm /> },
+          { path: ROUTE_PATHS.TOOL_DETAIL, element: <ToolDetail /> },
+          { path: ROUTE_PATHS.TOOL_EDIT, element: <ToolForm /> },
         ],
       },
     ],

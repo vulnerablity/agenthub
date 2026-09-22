@@ -11,10 +11,12 @@ from app.models.message import Message
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.role import Role
+from app.models.tool import AgentTool, Tool
 from app.models.user import User
 
 __all__ = [
     "Agent",
+    "AgentTool",
     "AgentVersion",
     "Base",
     "Conversation",
@@ -25,5 +27,6 @@ __all__ = [
     "Organization",
     "OrganizationMember",
     "Role",
+    "Tool",
     "User",
 ]

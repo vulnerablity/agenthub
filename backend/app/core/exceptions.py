@@ -236,3 +236,51 @@ class VectorStoreError(AppError):
 class RAGConfigInvalid(AppError):
     def __init__(self) -> None:
         super().__init__(422, "RAG_CONFIG_INVALID", "知识库绑定配置不合法")
+
+
+# 工具域错误码（tool calling 模块）
+
+
+class ToolNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "TOOL_NOT_FOUND", "工具不存在")
+
+
+class ToolNameConflict(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "TOOL_NAME_CONFLICT", "工具名称已存在")
+
+
+class ToolTypeInvalid(AppError):
+    def __init__(self) -> None:
+        super().__init__(422, "TOOL_TYPE_INVALID", "不支持的工具类型")
+
+
+class ToolSchemaInvalid(AppError):
+    def __init__(self) -> None:
+        super().__init__(422, "TOOL_SCHEMA_INVALID", "工具输入 Schema 不合法")
+
+
+class ToolConfigInvalid(AppError):
+    def __init__(self, detail: str = "工具配置不合法") -> None:
+        super().__init__(422, "TOOL_CONFIG_INVALID", detail)
+
+
+class ToolSsrfBlocked(AppError):
+    def __init__(self) -> None:
+        super().__init__(422, "TOOL_SSRF_BLOCKED", "目标地址不允许访问")
+
+
+class ToolRunError(AppError):
+    def __init__(self) -> None:
+        super().__init__(502, "TOOL_RUN_ERROR", "工具执行失败")
+
+
+class AgentToolAlreadyBound(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "AGENT_TOOL_ALREADY_BOUND", "该工具已绑定此智能体")
+
+
+class AgentToolNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "AGENT_TOOL_NOT_FOUND", "智能体未绑定该工具")

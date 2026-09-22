@@ -9,6 +9,7 @@ import {
   orgMembersPath,
   orgSettingsPath,
   ROUTE_PATHS,
+  toolsPath,
 } from '@/constants/routes'
 import { useMe } from '@/hooks/useMe'
 import { useAuthStore } from '@/stores/auth'
@@ -97,6 +98,15 @@ export default function AppLayout() {
           ) : (
             <NavLink to={knowledgeBasesPath(currentOrgId)} className={navLinkClass}>
               知识库
+            </NavLink>
+          )}
+          {orgNavDisabled ? (
+            <span className="cursor-not-allowed rounded-lg px-3 py-2 text-sm text-neutral-300">
+              工具
+            </span>
+          ) : (
+            <NavLink to={toolsPath(currentOrgId)} className={navLinkClass}>
+              工具
             </NavLink>
           )}
           {orgNavDisabled ? (

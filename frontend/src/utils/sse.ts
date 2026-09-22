@@ -3,7 +3,12 @@
 // 与 REST 拦截器行为对齐：手动携带 Token 与 X-Organization-Id；401 复用 http.ts 的全局登出回调
 import type { ApiErrorBody } from '@/types/http'
 import { ApiError } from '@/types/http'
-import type { SseDonePayload, SseErrorPayload } from '@/types/chat'
+import type {
+  SseDonePayload,
+  SseErrorPayload,
+  SseToolCallPayload,
+  SseToolResultPayload,
+} from '@/types/chat'
 
 import { BASE_URL, getCurrentOrgId, triggerUnauthorized } from './http'
 import { getAccessToken } from './token'
@@ -11,10 +16,14 @@ import { getAccessToken } from './token'
 export interface SseHandlers {
   /** message 事件：增量 delta 片段，客户端按序拼接 */
   onMessage: (delta: string) => void
-  /** done 事件：终止帧（message_id / token_usage） */
+  /** done 事件：终止帧（message_id / token_usage / sources / tool_calls） */
   onDone: (payload: SseDonePayload) => void
   /** error 事件：流中失败（流前失败以 ApiError 抛出） */
   onError: (payload: SseErrorPayload) => void
+  /** tool_call 事件：LLM 请求了一次工具调用（tool-calling.md 2.7） */
+  onToolCall?: (payload: SseToolCallPayload) => void
+  /** tool_result 事件：一次工具执行的收尾（tool-calling.md 2.7） */
+  onToolResult?: (payload: SseToolResultPayload) => void
 }
 
 /** POST 流式请求：仅处理 200；非 200 读取统一 JSON 错误体并抛 ApiError（409/404/422 等流前错误） */
@@ -93,6 +102,10 @@ export async function postSse(
                 handlers.onDone(data as unknown as SseDonePayload)
               } else if (eventType === 'error') {
                 handlers.onError(data as unknown as SseErrorPayload)
+              } else if (eventType === 'tool_call') {
+                handlers.onToolCall?.(data as unknown as SseToolCallPayload)
+              } else if (eventType === 'tool_result') {
+                handlers.onToolResult?.(data as unknown as SseToolResultPayload)
               }
             } catch {
               // 无法解析的数据帧静默跳过

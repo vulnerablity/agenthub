@@ -93,12 +93,14 @@ class OrganizationService:
         return await self._detail(org, membership.role.name)
 
     async def dissolve(self, org: Organization) -> None:
-        """解散：先删智能体（版本随外键 CASCADE）、再清知识库（文件/向量/DB，knowledge.md 联动）、
-        然后清成员关系、最后删组织（外键顺序，设计文档 D8）"""
+        """解散：先删智能体（版本与工具绑定随外键 CASCADE）、再清知识库（文件/向量/DB，knowledge.md 联动）、
+        再清工具（tool-calling.md 2.8）、然后清成员关系、最后删组织（外键顺序，设计文档 D8）"""
         from app.services.knowledge_service import KnowledgeService
+        from app.services.tool_service import ToolService
 
         await self.agent_repo.delete_by_org(org.id)
         await KnowledgeService(self.db).delete_by_org(org.id)
+        await ToolService(self.db).delete_by_org(org.id)
         await self.org_repo.delete_memberships(org.id)
         await self.org_repo.delete(org)
         await self.db.commit()

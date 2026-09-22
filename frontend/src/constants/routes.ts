@@ -18,6 +18,10 @@ export const ROUTE_PATHS = {
   KNOWLEDGE_BASE_NEW: '/organizations/:orgId/knowledge-bases/new',
   KNOWLEDGE_BASE_DETAIL: '/organizations/:orgId/knowledge-bases/:kbId',
   KNOWLEDGE_BASE_EDIT: '/organizations/:orgId/knowledge-bases/:kbId/edit',
+  TOOLS: '/organizations/:orgId/tools',
+  TOOL_NEW: '/organizations/:orgId/tools/new',
+  TOOL_DETAIL: '/organizations/:orgId/tools/:toolId',
+  TOOL_EDIT: '/organizations/:orgId/tools/:toolId/edit',
 } as const
 
 /** 生成带组织 id 的成员管理路径 */
@@ -95,4 +99,24 @@ export function knowledgeBaseEditPath(
   kbId: number | string,
 ): string {
   return `/organizations/${orgId}/knowledge-bases/${kbId}/edit`
+}
+
+/** 生成带组织 id 的工具列表路径 */
+export function toolsPath(orgId: number | string): string {
+  return `/organizations/${orgId}/tools`
+}
+
+/** 生成带组织 id 的新建工具路径 */
+export function toolNewPath(orgId: number | string): string {
+  return `/organizations/${orgId}/tools/new`
+}
+
+/** 生成带组织与工具 id 的详情路径 */
+export function toolDetailPath(orgId: number | string, toolId: number | string): string {
+  return `/organizations/${orgId}/tools/${toolId}`
+}
+
+/** 生成带组织与工具 id 的编辑路径 */
+export function toolEditPath(orgId: number | string, toolId: number | string): string {
+  return `/organizations/${orgId}/tools/${toolId}/edit`
 }
