@@ -18,14 +18,10 @@ class ExecutionStep(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     # 一次生成的 UUID 分组键（D1）；另加 organization_id/user_id 供组织隔离与 member 本人可见过滤（D3）
     execution_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    organization_id: Mapped[int] = mapped_column(
-        BigInteger, index=True, nullable=False
-    )
+    organization_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
     agent_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
-    conversation_id: Mapped[int] = mapped_column(
-        BigInteger, index=True, nullable=False
-    )
+    conversation_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
     # step_type：llm / rag / tool；step_name 细分（如 llm_round_1 / rag_retrieval / tool_计算器）
     step_type: Mapped[str] = mapped_column(String(20), nullable=False)
     step_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -44,14 +40,10 @@ class LLMUsageLog(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     execution_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    organization_id: Mapped[int] = mapped_column(
-        BigInteger, index=True, nullable=False
-    )
+    organization_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
     # 比需求 4.14 补充 conversation_id 与 round：tool-calling 多轮 = 一个 execution 下多条 usage（D2）
     agent_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
-    conversation_id: Mapped[int] = mapped_column(
-        BigInteger, index=True, nullable=False
-    )
+    conversation_id: Mapped[int] = mapped_column(BigInteger, index=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

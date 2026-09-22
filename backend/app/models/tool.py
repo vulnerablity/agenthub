@@ -49,9 +49,7 @@ class Tool(Base):
         DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    __table_args__ = (
-        UniqueConstraint("organization_id", "name", name="uq_tool_name"),
-    )
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_tool_name"),)
 
 
 class AgentTool(Base):

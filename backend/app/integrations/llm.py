@@ -85,9 +85,7 @@ class LLMClient:
                         _accumulate_tool_call(accumulators, part)
                     if chunk.get("usage"):
                         usage = chunk["usage"]
-                calls = [
-                    _finalize_tool_call(acc) for acc in accumulators.values()
-                ]
+                calls = [_finalize_tool_call(acc) for acc in accumulators.values()]
                 if calls:
                     yield {"tool_calls": calls}
                 yield {"usage": usage}

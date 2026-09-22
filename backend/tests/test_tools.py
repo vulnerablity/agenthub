@@ -111,7 +111,11 @@ async def test_create_http_tool(client):
         org["id"],
         "订单查询",
         "http",
-        config={"url": "https://example.com/orders", "method": "POST", "headers": {"X-Token": "abc"}},
+        config={
+            "url": "https://example.com/orders",
+            "method": "POST",
+            "headers": {"X-Token": "abc"},
+        },
         schema={
             "type": "object",
             "properties": {"order_id": {"type": "string"}},
@@ -221,7 +225,9 @@ async def test_org_isolation_and_permissions(client):
     org_a = await _create_org(client, alice, name="A")
     org_b = await _create_org(client, bob, name="B")
 
-    tool = (await _create_tool(client, alice, org_a["id"], "私有工具", "calculator")).json()
+    tool = (
+        await _create_tool(client, alice, org_a["id"], "私有工具", "calculator")
+    ).json()
 
     # 跨组织访问 → 404（不泄露存在性，D12）
     resp = await client.get(
@@ -346,9 +352,7 @@ async def test_http_execution(client, monkeypatch):
         )
     ).json()
 
-    monkeypatch.setattr(
-        tool_runners_module.httpx, "AsyncClient", _FakeHttpClient
-    )
+    monkeypatch.setattr(tool_runners_module.httpx, "AsyncClient", _FakeHttpClient)
     resp = await client.post(
         f"/api/v1/tools/{tool['id']}/test",
         json={"arguments": {"order_id": "ORD-1"}},
@@ -486,7 +490,9 @@ async def test_binding_cross_org_and_agent(client):
     org_b = await _create_org(client, bob, name="B")
     agent_a = await _create_agent(client, alice, org_a["id"])
     agent_b = await _create_agent(client, bob, org_b["id"], name="B助手")
-    tool_a = (await _create_tool(client, alice, org_a["id"], "计算器", "calculator")).json()
+    tool_a = (
+        await _create_tool(client, alice, org_a["id"], "计算器", "calculator")
+    ).json()
 
     # 跨组织 agent（路径资源先校验）→ 404 AGENT_NOT_FOUND（不泄露归属，D12）
     resp = await client.post(

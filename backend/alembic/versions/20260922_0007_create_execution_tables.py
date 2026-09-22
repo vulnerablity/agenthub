@@ -42,11 +42,25 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_agent_execution_logs_execution_id", "agent_execution_logs", ["execution_id"])
-    op.create_index("ix_agent_execution_logs_organization_id", "agent_execution_logs", ["organization_id"])
-    op.create_index("ix_agent_execution_logs_user_id", "agent_execution_logs", ["user_id"])
-    op.create_index("ix_agent_execution_logs_agent_id", "agent_execution_logs", ["agent_id"])
-    op.create_index("ix_agent_execution_logs_conversation_id", "agent_execution_logs", ["conversation_id"])
+    op.create_index(
+        "ix_agent_execution_logs_execution_id", "agent_execution_logs", ["execution_id"]
+    )
+    op.create_index(
+        "ix_agent_execution_logs_organization_id",
+        "agent_execution_logs",
+        ["organization_id"],
+    )
+    op.create_index(
+        "ix_agent_execution_logs_user_id", "agent_execution_logs", ["user_id"]
+    )
+    op.create_index(
+        "ix_agent_execution_logs_agent_id", "agent_execution_logs", ["agent_id"]
+    )
+    op.create_index(
+        "ix_agent_execution_logs_conversation_id",
+        "agent_execution_logs",
+        ["conversation_id"],
+    )
 
     # 2. llm_usage_logs：LLM 调用级 token/耗时（需求 4.14）
     # 补充列：execution_id / organization_id / conversation_id / round（tool-calling 多轮归属）
@@ -72,10 +86,16 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_llm_usage_logs_execution_id", "llm_usage_logs", ["execution_id"])
-    op.create_index("ix_llm_usage_logs_organization_id", "llm_usage_logs", ["organization_id"])
+    op.create_index(
+        "ix_llm_usage_logs_execution_id", "llm_usage_logs", ["execution_id"]
+    )
+    op.create_index(
+        "ix_llm_usage_logs_organization_id", "llm_usage_logs", ["organization_id"]
+    )
     op.create_index("ix_llm_usage_logs_agent_id", "llm_usage_logs", ["agent_id"])
-    op.create_index("ix_llm_usage_logs_conversation_id", "llm_usage_logs", ["conversation_id"])
+    op.create_index(
+        "ix_llm_usage_logs_conversation_id", "llm_usage_logs", ["conversation_id"]
+    )
 
 
 def downgrade() -> None:
@@ -84,9 +104,15 @@ def downgrade() -> None:
     op.drop_index("ix_llm_usage_logs_organization_id", table_name="llm_usage_logs")
     op.drop_index("ix_llm_usage_logs_execution_id", table_name="llm_usage_logs")
     op.drop_table("llm_usage_logs")
-    op.drop_index("ix_agent_execution_logs_conversation_id", table_name="agent_execution_logs")
+    op.drop_index(
+        "ix_agent_execution_logs_conversation_id", table_name="agent_execution_logs"
+    )
     op.drop_index("ix_agent_execution_logs_agent_id", table_name="agent_execution_logs")
     op.drop_index("ix_agent_execution_logs_user_id", table_name="agent_execution_logs")
-    op.drop_index("ix_agent_execution_logs_organization_id", table_name="agent_execution_logs")
-    op.drop_index("ix_agent_execution_logs_execution_id", table_name="agent_execution_logs")
+    op.drop_index(
+        "ix_agent_execution_logs_organization_id", table_name="agent_execution_logs"
+    )
+    op.drop_index(
+        "ix_agent_execution_logs_execution_id", table_name="agent_execution_logs"
+    )
     op.drop_table("agent_execution_logs")

@@ -108,9 +108,7 @@ async def bind_agent_tool(
     )
 
 
-@agent_tools_router.patch(
-    "/{agent_id}/tools/{tool_id}", response_model=AgentToolDetail
-)
+@agent_tools_router.patch("/{agent_id}/tools/{tool_id}", response_model=AgentToolDetail)
 async def update_agent_tool(
     agent_id: int,
     tool_id: int,

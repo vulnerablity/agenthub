@@ -929,7 +929,11 @@ async def test_tool_calling_loop_success(client, monkeypatch):
     kinds = [e for e, _ in events if e is not None]
     assert kinds == ["message", "tool_call", "tool_result", "message", "done"]
     call_evt = next(d for e, d in events if e == "tool_call")
-    assert call_evt == {"round": 1, "name": "计算器", "arguments": {"expression": "1+1"}}
+    assert call_evt == {
+        "round": 1,
+        "name": "计算器",
+        "arguments": {"expression": "1+1"},
+    }
     result_evt = next(d for e, d in events if e == "tool_result")
     assert result_evt == {"round": 1, "name": "计算器", "status": "ok", "output": "2"}
 

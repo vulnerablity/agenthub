@@ -103,7 +103,9 @@ class ExecutionRepository:
                 # LEFT JOIN agents 仅取名称（审计数据落在 Agent 已删除场景为 None）
                 func.max(Agent.name),
             )
-            .outerjoin(usage_subq, usage_subq.c.execution_id == ExecutionStep.execution_id)
+            .outerjoin(
+                usage_subq, usage_subq.c.execution_id == ExecutionStep.execution_id
+            )
             .outerjoin(Agent, Agent.id == ExecutionStep.agent_id)
             .where(ExecutionStep.organization_id == org_id)
             .group_by(

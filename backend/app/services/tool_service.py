@@ -93,7 +93,9 @@ class ToolService:
     ) -> ToolDetail:
         if await self.repo.name_exists(org.id, data.name):
             raise ToolNameConflict()
-        schema, config = self._validated_payload(data.type, data.tool_schema, data.config)
+        schema, config = self._validated_payload(
+            data.type, data.tool_schema, data.config
+        )
         try:
             tool = await self.repo.create_tool(
                 Tool(
@@ -196,7 +198,12 @@ class ToolService:
         ]
 
     async def bind_tool(
-        self, org: Organization, agent_id: int, tool_id: int, enabled: bool, config: dict | None
+        self,
+        org: Organization,
+        agent_id: int,
+        tool_id: int,
+        enabled: bool,
+        config: dict | None,
     ) -> AgentToolDetail:
         """绑定：双方均须归属当前组织；重复绑定 409；config_json 覆盖 tools.config（D08）"""
         await self._ensure_agent_in_org(org, agent_id)
@@ -205,7 +212,12 @@ class ToolService:
             raise AgentToolAlreadyBound()
         try:
             binding = await self.repo.create_binding(
-                AgentTool(agent_id=agent_id, tool_id=tool_id, enabled=enabled, config_json=config)
+                AgentTool(
+                    agent_id=agent_id,
+                    tool_id=tool_id,
+                    enabled=enabled,
+                    config_json=config,
+                )
             )
             await self.db.commit()
             await self.db.refresh(binding)
@@ -225,7 +237,11 @@ class ToolService:
         )
 
     async def update_binding(
-        self, org: Organization, agent_id: int, tool_id: int, data: AgentToolUpdateRequest
+        self,
+        org: Organization,
+        agent_id: int,
+        tool_id: int,
+        data: AgentToolUpdateRequest,
     ) -> AgentToolDetail:
         """更新绑定（enabled 开关 / 绑定级 config 覆盖）；config_json 置 null 即回退工具默认配置（D08）"""
         await self._ensure_agent_in_org(org, agent_id)

@@ -61,7 +61,9 @@ class ToolRepository:
         await self.db.flush()
         return binding
 
-    async def list_bindings_with_tool(self, agent_id: int) -> list[tuple[AgentTool, Tool]]:
+    async def list_bindings_with_tool(
+        self, agent_id: int
+    ) -> list[tuple[AgentTool, Tool]]:
         """智能体已绑定列表（join 工具信息，供详情展示与对话工具加载）"""
         result = await self.db.execute(
             select(AgentTool, Tool)

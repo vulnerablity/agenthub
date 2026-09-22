@@ -160,9 +160,7 @@ async def test_execution_tool_loop_recorded(client, monkeypatch):
         json={"tool_id": tool["id"]},
         headers=_hdr(token, org["id"]),
     )
-    conv = (
-        await _create_conversation(client, token, org["id"], agent["id"])
-    ).json()
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
 
     monkeypatch.setattr(
         llm_module.LLMClient,
@@ -233,9 +231,7 @@ async def test_execution_rag_step_recorded(client, monkeypatch):
         name="知识助手",
         config_json={"rag": {"knowledge_base_ids": [kb["id"]], "rag_top_k": 3}},
     )
-    conv = (
-        await _create_conversation(client, token, org["id"], agent["id"])
-    ).json()
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
 
     async def fake_search(self, org, kb_id, data):
         return SearchResponse(
@@ -305,9 +301,7 @@ async def test_execution_rag_degraded_marks_error(client, monkeypatch):
         org["id"],
         config_json={"rag": {"knowledge_base_ids": [kb["id"]], "rag_top_k": 3}},
     )
-    conv = (
-        await _create_conversation(client, token, org["id"], agent["id"])
-    ).json()
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
 
     from app.core.exceptions import VectorStoreError
 
@@ -342,9 +336,7 @@ async def test_execution_llm_error_marked(client, monkeypatch):
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
     agent = await _create_agent(client, token, org["id"])
-    conv = (
-        await _create_conversation(client, token, org["id"], agent["id"])
-    ).json()
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
 
     monkeypatch.setattr(
         llm_module.LLMClient,
@@ -387,9 +379,7 @@ async def test_execution_member_scope(client, monkeypatch):
         json={"email": "bob@test.com", "role": "member"},
         headers=_auth(alice),
     )
-    conv_a = (
-        await _create_conversation(client, alice, org["id"], agent["id"])
-    ).json()
+    conv_a = (await _create_conversation(client, alice, org["id"], agent["id"])).json()
     conv_b = (await _create_conversation(client, bob, org["id"], agent["id"])).json()
 
     monkeypatch.setattr(llm_module.LLMClient, "chat_stream", _fake_chat(["回答"]))
@@ -456,7 +446,9 @@ async def test_execution_cross_org_isolation(client, monkeypatch):
     org_a = await _create_org(client, token, name="A")
     org_b = await _create_org(client, token, name="B")
     agent_a = await _create_agent(client, token, org_a["id"])
-    conv = (await _create_conversation(client, token, org_a["id"], agent_a["id"])).json()
+    conv = (
+        await _create_conversation(client, token, org_a["id"], agent_a["id"])
+    ).json()
 
     monkeypatch.setattr(llm_module.LLMClient, "chat_stream", _fake_chat(["回答"]))
     await _stream(client, token, org_a["id"], conv["id"], "提问")
@@ -548,9 +540,7 @@ async def test_execution_log_failure_does_not_break_chat(client, monkeypatch):
     token = await _token(client, "alice@test.com")
     org = await _create_org(client, token)
     agent = await _create_agent(client, token, org["id"])
-    conv = (
-        await _create_conversation(client, token, org["id"], agent["id"])
-    ).json()
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
 
     async def broken_add_step(self, step):
         raise RuntimeError("db down")

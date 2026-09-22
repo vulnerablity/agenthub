@@ -428,7 +428,9 @@ class ChatService:
             if not binding.enabled:
                 continue
             tools.append(to_openai_tool(tool))
-            config = binding.config_json if binding.config_json is not None else tool.config
+            config = (
+                binding.config_json if binding.config_json is not None else tool.config
+            )
             tool_map[tool.name] = (tool.type, config)
         return tools, tool_map
 
@@ -586,7 +588,9 @@ class ChatService:
                 if runner is None:
                     result = ToolResult.failed(f"当前配置中不存在工具 {name}")
                 elif call.get("args_error"):
-                    result = ToolResult.failed(f"调用参数解析失败：{call['args_error']}")
+                    result = ToolResult.failed(
+                        f"调用参数解析失败：{call['args_error']}"
+                    )
                 else:
                     # 错误不外抛（D11）：工具执行失败以 error 结果回传 LLM
                     result = await run_tool(runner[0], runner[1], arguments)

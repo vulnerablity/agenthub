@@ -56,9 +56,7 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("agent_id", sa.BigInteger(), nullable=False),
         sa.Column("tool_id", sa.BigInteger(), nullable=False),
-        sa.Column(
-            "enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False
-        ),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False),
         sa.Column("config_json", sa.JSON(), nullable=True),
         sa.Column(
             "created_at",

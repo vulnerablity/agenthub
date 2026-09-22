@@ -134,13 +134,18 @@ class HttpRunner:
                 timeout=httpx.Timeout(connect=5.0, read=15.0, write=15.0, pool=5.0),
                 follow_redirects=False,
             ) as client:
-                resp = await client.request(
-                    method, url, headers=headers, content=body
-                )
+                resp = await client.request(method, url, headers=headers, content=body)
         except (httpx.HTTPError, OSError, ValueError) as exc:
             return ToolResult.failed(f"请求失败：{exc}")
         text = resp.text[:MAX_OUTPUT_CHARS]
-        if resp.status_code >= 400 or resp.status_code in (300, 301, 302, 303, 307, 308):
+        if resp.status_code >= 400 or resp.status_code in (
+            300,
+            301,
+            302,
+            303,
+            307,
+            308,
+        ):
             return ToolResult.failed(f"HTTP {resp.status_code}：{text}")
         return ToolResult(output=text or "(空响应)")
 
@@ -173,7 +178,9 @@ def _assert_public_destination(url: str) -> None:
     if not host:
         raise SsrfBlocked("缺少主机名")
     try:
-        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+        infos = socket.getaddrinfo(
+            host, parsed.port or (443 if parsed.scheme == "https" else 80)
+        )
     except OSError as exc:
         raise SsrfBlocked(f"域名解析失败 {exc}")
     for info in infos:
