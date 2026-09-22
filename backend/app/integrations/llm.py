@@ -122,7 +122,7 @@ def _finalize_tool_call(acc: dict) -> dict:
     try:
         arguments = json.loads(raw) if raw else {}
         if not isinstance(arguments, dict):
-            raise ValueError("arguments 不是 JSON 对象")
+            raise TypeError("arguments 不是 JSON 对象")
     except (json.JSONDecodeError, ValueError):
         arguments = {}
         acc["args_error"] = raw or "(空)"

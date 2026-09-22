@@ -22,9 +22,9 @@ from app.models import AgentTool, Organization, Tool
 from app.repositories.agent_repo import AgentRepository
 from app.repositories.tool_repo import ToolRepository
 from app.schemas.tool import (
+    CALCULATOR_SCHEMA,
     AgentToolDetail,
     AgentToolUpdateRequest,
-    CALCULATOR_SCHEMA,
     ToolCreateRequest,
     ToolDetail,
     ToolTestRequest,

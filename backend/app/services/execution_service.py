@@ -15,7 +15,6 @@ from app.models import (
     LLMUsageLog,
     Organization,
     OrganizationMember,
-    User,
 )
 from app.repositories.execution_repo import ExecutionRepository
 from app.schemas.execution import (

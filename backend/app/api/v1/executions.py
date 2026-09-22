@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import CurrentUser, DbSession, require_header_org_role
+from app.api.deps import DbSession, require_header_org_role
 from app.models import Organization, OrganizationMember
 from app.schemas.execution import ExecutionDetail, ExecutionListResponse
 from app.services.execution_service import ExecutionService

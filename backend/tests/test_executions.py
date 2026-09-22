@@ -1,7 +1,6 @@
 # tests/test_executions.py
 # 执行监控集成测试（需求 3.8，execution.md）：执行链路落库（llm/rag/tool）与聚合列表/详情
 # 覆盖：D3 权限矩阵（owner/admin 全量 / member 仅本人 / viewer 403）、组织隔离、D5 写入失败降级、筛选分页
-import json
 
 from app.core.exceptions import LLMUpstreamError
 from app.integrations import llm as llm_module

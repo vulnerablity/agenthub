@@ -53,7 +53,7 @@ class CalculatorRunner:
         try:
             tree = ast.parse(expr.strip(), mode="eval")
             _validate_tree(tree)
-            value = eval(  # noqa: S307 - ast 白名单前置校验后执行
+            value = eval(
                 compile(tree, "<tool>", "eval"), {"__builtins__": {}}, SAFE_FUNCS
             )
         except ToolValidationError as exc:
@@ -71,7 +71,7 @@ class ToolValidationError(Exception):
     """calculator 表达式白名单校验失败"""
 
 
-def _format_number(value: int | float) -> str:
+def _format_number(value: float) -> str:
     """整数值去掉小数点（避免输出 2.0），浮点保持原样"""
     if isinstance(value, float) and value.is_integer():
         return str(int(value))

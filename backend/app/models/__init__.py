@@ -5,8 +5,8 @@ from app.models.agent_version import AgentVersion
 from app.models.base import Base
 from app.models.conversation import Conversation
 from app.models.document import Document
-from app.models.execution_log import ExecutionStep, LLMUsageLog
 from app.models.document_chunk import DocumentChunk
+from app.models.execution_log import ExecutionStep, LLMUsageLog
 from app.models.knowledge_base import KnowledgeBase
 from app.models.message import Message
 from app.models.organization import Organization
@@ -24,8 +24,8 @@ __all__ = [
     "Document",
     "DocumentChunk",
     "ExecutionStep",
-    "LLMUsageLog",
     "KnowledgeBase",
+    "LLMUsageLog",
     "Message",
     "Organization",
     "OrganizationMember",
