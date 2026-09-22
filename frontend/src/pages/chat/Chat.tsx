@@ -19,6 +19,7 @@ import { messagesQueryKey, useConversationMessages } from '@/hooks/useConversati
 import { useChatStream } from '@/hooks/useChatStream'
 import { useOrg } from '@/hooks/useOrg'
 import type { MessageDetail, RAGSource } from '@/types'
+import type { ToolCallView } from '@/components/chat/MessageBubble'
 
 /** 乐观追加用户消息用的本地占位（负数 id 与服务端记录区分） */
 function localUserMessage(content: string): MessageDetail {
@@ -31,6 +32,28 @@ function localUserMessage(content: string): MessageDetail {
     metadata_json: null,
     created_at: new Date().toISOString(),
   }
+}
+
+/** 历史消息 metadata_json.tool_calls → 气泡工具轨迹视图（metadata 无结构保证，容错解析） */
+function readToolCalls(metadata: Record<string, unknown> | null | undefined): ToolCallView[] {
+  const raw = metadata?.tool_calls
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
+    .map((item) => ({
+      round: typeof item.round === 'number' ? item.round : 0,
+      name: typeof item.name === 'string' ? item.name : '未知工具',
+      arguments:
+        item.arguments != null && typeof item.arguments === 'object'
+          ? (item.arguments as Record<string, unknown>)
+          : {},
+      status: item.status === 'error' ? 'error' : 'ok',
+      // error 时 output 为空、error 携带原因（后端 tool_calls 轨迹结构）
+      output:
+        item.status === 'error'
+          ? String(item.error ?? item.output ?? '')
+          : String(item.output ?? ''),
+    }))
 }
 
 export default function Chat() {
@@ -49,6 +72,8 @@ export default function Chat() {
   // 本地消息视图：历史 + 乐观用户气泡 + 流式助手气泡；缓存刷新后以服务端历史为准
   const [messages, setMessages] = useState<MessageDetail[]>([])
   const [streamAssistant, setStreamAssistant] = useState<string | null>(null)
+  // 流式中的工具调用轨迹（tool_call → running，tool_result → ok/error 并附输出）
+  const [liveToolCalls, setLiveToolCalls] = useState<ToolCallView[]>([])
   const [chatError, setChatError] = useState<string | null>(null)
   const deltaCountRef = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -76,13 +101,40 @@ export default function Chat() {
       }
       deltaCountRef.current = 0
       setStreamAssistant(null)
+      setLiveToolCalls([])
       refreshAfterStream()
     },
     onStreamError: (payload) => {
       deltaCountRef.current = 0
       setStreamAssistant(null)
+      setLiveToolCalls([])
       setChatError(payload.message)
       refreshAfterStream()
+    },
+    onToolCall: (payload) => {
+      // 新一次调用进入 running 态（tool_result 按序配对更新，见 onToolResult）
+      setLiveToolCalls((prev) => [
+        ...prev,
+        { round: payload.round, name: payload.name, arguments: payload.arguments, status: 'running' },
+      ])
+    },
+    onToolResult: (payload) => {
+      setLiveToolCalls((prev) =>
+        prev.map((call, index) => {
+          // 后端 tool_call/tool_result 严格按序成对发出：更新首个仍为 running 的调用
+          const firstRunning = prev.findIndex((item) => item.status === 'running')
+          if (index === firstRunning) {
+            return {
+              round: payload.round,
+              name: payload.name,
+              arguments: call.arguments,
+              status: payload.status,
+              output: payload.output,
+            }
+          }
+          return call
+        }),
+      )
     },
   })
 
@@ -94,6 +146,7 @@ export default function Chat() {
     setLoadedHistoryKey(historyKey)
     setMessages(history ?? [])
     setStreamAssistant(null)
+    setLiveToolCalls([])
     setChatError(null)
   }
 
@@ -149,6 +202,7 @@ export default function Chat() {
     if (conversationId == null) return
     setChatError(null)
     deltaCountRef.current = 0
+    setLiveToolCalls([])
     setMessages((prev) => [...prev, localUserMessage(content)])
     send(content)
   }
@@ -216,10 +270,20 @@ export default function Chat() {
                           ? (message.metadata_json?.sources as RAGSource[] | undefined)
                           : undefined
                       }
+                      toolCalls={
+                        message.role === 'assistant'
+                          ? readToolCalls(message.metadata_json)
+                          : null
+                      }
                     />
                   ))}
                   {streaming && streamAssistant != null ? (
-                    <MessageBubble role="assistant" content={streamAssistant} streaming />
+                    <MessageBubble
+                      role="assistant"
+                      content={streamAssistant}
+                      streaming
+                      toolCalls={liveToolCalls.length > 0 ? liveToolCalls : null}
+                    />
                   ) : null}
                 </>
               )}

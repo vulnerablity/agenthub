@@ -6,24 +6,30 @@ from app.models.base import Base
 from app.models.conversation import Conversation
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.execution_log import ExecutionStep, LLMUsageLog
 from app.models.knowledge_base import KnowledgeBase
 from app.models.message import Message
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.role import Role
+from app.models.tool import AgentTool, Tool
 from app.models.user import User
 
 __all__ = [
     "Agent",
+    "AgentTool",
     "AgentVersion",
     "Base",
     "Conversation",
     "Document",
     "DocumentChunk",
+    "ExecutionStep",
     "KnowledgeBase",
+    "LLMUsageLog",
     "Message",
     "Organization",
     "OrganizationMember",
     "Role",
+    "Tool",
     "User",
 ]

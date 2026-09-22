@@ -1,5 +1,5 @@
 // pages/agents/Detail.tsx
-// 智能体详情：基础信息 + 当前版本配置 + 版本历史（发布/回滚）+ 删除危险区（需求 3.3/3.4）
+// 智能体详情：基础信息 + 当前版本配置 + 版本历史（发布/回滚）+ 工具绑定 + 删除危险区（需求 3.3/3.4/3.7）
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -12,9 +12,12 @@ import {
   agentVersionNewPath,
   agentsPath,
   chatConversationPath,
+  toolsPath,
 } from '@/constants/routes'
 import { useAgent, useAgentVersions } from '@/hooks/useAgent'
+import { useBindAgentTool, useAgentTools, useUnbindAgentTool, useUpdateAgentTool } from '@/hooks/useAgentTools'
 import { useOrg } from '@/hooks/useOrg'
+import { useTools } from '@/hooks/useTools'
 
 export default function AgentDetail() {
   const { orgId: orgIdParam, agentId: agentIdParam } = useParams()
@@ -26,11 +29,32 @@ export default function AgentDetail() {
   const { data: org } = useOrg(orgId)
   const { data: agent, isPending } = useAgent(orgId, agentId)
   const { data: versions } = useAgentVersions(orgId, agentId)
+  // 工具绑定（tool-calling.md 3.4）：已绑定列表 + 组织内可选工具
+  const { data: boundTools } = useAgentTools(agentId)
+  const { data: allTools } = useTools(orgId)
   const [apiError, setApiError] = useState('')
   const [confirmName, setConfirmName] = useState('')
+  // 绑定弹层状态：待绑定工具 id
+  const [bindToolId, setBindToolId] = useState<number | null>(null)
 
   const canManage = canManageAgent(org?.my_role)
   const canChat = canChatAgent(org?.my_role)
+
+  const bindMutation = useBindAgentTool(agentId ?? 0)
+  const updateBindingMutation = useUpdateAgentTool(agentId ?? 0)
+  const unbindMutation = useUnbindAgentTool(agentId ?? 0)
+
+  const handleBind = () => {
+    if (agentId == null || bindToolId == null) return
+    setApiError('')
+    bindMutation.mutate(
+      { tool_id: bindToolId },
+      {
+        onSuccess: () => setBindToolId(null),
+        onError: (error) => setApiError(errorMessage(error)),
+      },
+    )
+  }
 
   /** 从详情页发起对话：创建会话后跳转对话页 */
   const startChat = useMutation({
@@ -318,6 +342,115 @@ export default function AgentDetail() {
         ) : (
           <p className="mt-4 text-sm text-neutral-500">暂无版本记录</p>
         )}
+      </section>
+
+      <section className="mt-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-neutral-900">工具</h3>
+          {canManage ? (
+            <a
+              href={`#${toolsPath(orgId)}`}
+              onClick={(e) => {
+                e.preventDefault()
+                navigate(toolsPath(orgId))
+              }}
+              className="text-xs text-indigo-600 transition hover:text-indigo-800"
+            >
+              管理工具库 →
+            </a>
+          ) : null}
+        </div>
+        <p className="mt-1 text-xs text-neutral-400">
+          对话中智能体将按需调用已启用工具（Tool Calling）
+        </p>
+
+        {boundTools && boundTools.length > 0 ? (
+          <ul className="mt-4 divide-y divide-neutral-50">
+            {boundTools.map((binding) => (
+              <li key={binding.id} className="flex flex-wrap items-center gap-3 py-3">
+                <span className="w-14 shrink-0 text-sm font-medium text-neutral-900">
+                  {binding.tool_name}
+                </span>
+                <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-600">
+                  {binding.tool_type === 'calculator' ? '计算器' : 'HTTP'}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs text-neutral-400">
+                  {binding.tool_description || '暂无描述'}
+                </span>
+                {canManage ? (
+                  <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-neutral-600">
+                    <input
+                      type="checkbox"
+                      checked={binding.enabled}
+                      disabled={updateBindingMutation.isPending}
+                      onChange={(e) => {
+                        setApiError('')
+                        updateBindingMutation.mutate(
+                          { toolId: binding.tool_id, data: { enabled: e.target.checked } },
+                          { onError: (error) => setApiError(errorMessage(error)) },
+                        )
+                      }}
+                      className="h-4 w-4 accent-indigo-600"
+                    />
+                    启用
+                  </label>
+                ) : (
+                  <span className="text-xs text-neutral-400">
+                    {binding.enabled ? '已启用' : '已停用'}
+                  </span>
+                )}
+                {canManage ? (
+                  <button
+                    type="button"
+                    disabled={unbindMutation.isPending}
+                    onClick={() => {
+                      setApiError('')
+                      if (window.confirm(`确定解绑工具「${binding.tool_name}」？`)) {
+                        unbindMutation.mutate(binding.tool_id, {
+                          onError: (error) => setApiError(errorMessage(error)),
+                        })
+                      }
+                    }}
+                    className="shrink-0 rounded-lg border border-red-200 px-3 py-1 text-xs text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    解绑
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-neutral-500">尚未绑定工具</p>
+        )}
+
+        {canManage ? (
+          <div className="mt-4 flex items-center gap-2 border-t border-neutral-100 pt-4">
+            <select
+              value={bindToolId ?? ''}
+              onChange={(e) => setBindToolId(e.target.value ? Number(e.target.value) : null)}
+              className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            >
+              <option value="">选择要绑定的工具…</option>
+              {(allTools ?? [])
+                .filter(
+                  (tool) => !(boundTools ?? []).some((binding) => binding.tool_id === tool.id),
+                )
+                .map((tool) => (
+                  <option key={tool.id} value={tool.id}>
+                    {tool.name}（{tool.type === 'calculator' ? '计算器' : 'HTTP'}）
+                  </option>
+                ))}
+            </select>
+            <button
+              type="button"
+              disabled={bindToolId == null || bindMutation.isPending}
+              onClick={handleBind}
+              className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {bindMutation.isPending ? '绑定中…' : '绑定'}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       {canManage ? (

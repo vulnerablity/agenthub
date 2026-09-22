@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.schemas.knowledge import RAGSource
+from app.schemas.tool import ToolCallRun
 
 
 class ConversationCreateRequest(BaseModel):
@@ -65,11 +66,30 @@ class MessageDetail(BaseModel):
 
 class SseDonePayload(BaseModel):
     """done 事件：助手消息落库 id 与 token_usage；LLM 空输出时 message_id 为 null（chat.md D13）；
-    sources 为 RAG 引用来源（knowledge.md D11，未启用 RAG 时为空列表）"""
+    sources 为 RAG 引用来源（knowledge.md D11，未启用 RAG 时为空列表）；
+    tool_calls 为工具调用轨迹（tool-calling.md 2.7，未触发工具时为空列表）"""
 
     message_id: int | None
     token_usage: dict[str, Any] | None
     sources: list[RAGSource] = Field(default_factory=list)
+    tool_calls: list[ToolCallRun] = Field(default_factory=list)
+
+
+class SseToolCallPayload(BaseModel):
+    """tool_call 事件：LLM 请求了一次工具调用（tool-calling.md 2.7）"""
+
+    round: int
+    name: str
+    arguments: dict[str, Any]
+
+
+class SseToolResultPayload(BaseModel):
+    """tool_result 事件：一次工具执行的收尾（tool-calling.md 2.7）"""
+
+    round: int
+    name: str
+    status: str
+    output: str
 
 
 class SseErrorPayload(BaseModel):

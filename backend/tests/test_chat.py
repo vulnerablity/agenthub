@@ -66,11 +66,13 @@ async def _create_conversation(client, token, org_id, agent_id, title=None):
 
 
 def _fake_chat(deltas, usage=None, error_after=None, blocker=None, captured=None):
-    """构造假 LLM 流：按序产出 delta；可选阻塞（并发测试）/ 流中抛错 / 捕获上下文参数"""
+    """构造假 LLM 流：按序产出 delta；可选阻塞（并发测试）/ 流中抛错 / 捕获上下文参数（含 tools）"""
 
-    async def chat_stream(self, *, messages, model, temperature=None, max_tokens=None):
+    async def chat_stream(
+        self, *, messages, model, temperature=None, max_tokens=None, tools=None
+    ):
         if captured is not None:
-            captured.append({"messages": messages, "model": model})
+            captured.append({"messages": messages, "model": model, "tools": tools})
         for delta in deltas:
             yield {"delta": delta}
         if blocker is not None:
@@ -80,6 +82,32 @@ def _fake_chat(deltas, usage=None, error_after=None, blocker=None, captured=None
         yield {
             "usage": usage
             or {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7}
+        }
+
+    return chat_stream
+
+
+def _fake_tool_loop(rounds):
+    """构造带工具调用的假 LLM 流：rounds 为每轮产出描述列表
+    [{"deltas": [...], "tool_calls": [...]}, ...]；每次 chat_stream 调用消费一个描述
+    （等价一次上游请求），最后一轮无 tool_calls 即终答"""
+    queue = list(rounds)
+
+    async def chat_stream(
+        self, *, messages, model, temperature=None, max_tokens=None, tools=None
+    ):
+        spec = queue.pop(0)
+        for delta in spec.get("deltas", []):
+            yield {"delta": delta}
+        calls = spec.get("tool_calls")
+        if calls:
+            yield {"tool_calls": calls}
+        yield {
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+            }
         }
 
     return chat_stream
@@ -305,7 +333,12 @@ async def test_stream_empty_output(client, monkeypatch):
         events = await _read_sse(resp)
 
     done = next(d for e, d in events if e == "done")
-    assert done == {"message_id": None, "token_usage": None, "sources": []}
+    assert done == {
+        "message_id": None,
+        "token_usage": None,
+        "sources": [],
+        "tool_calls": [],
+    }
     messages = (
         await client.get(
             f"/api/v1/conversations/{conv['id']}/messages",
@@ -828,3 +861,265 @@ async def test_version_snapshot_stays_after_publish(client, monkeypatch):
         )
     ).json()
     assert detail["agent_version_id"] == v1_id
+
+
+# ---------- Tool Calling（tool-calling.md 2.6 / 2.7，与工具模块联调） ----------
+
+
+async def _create_calc_tool(client, token, org_id, name="计算器"):
+    return (
+        await client.post(
+            "/api/v1/tools",
+            json={
+                "name": name,
+                "type": "calculator",
+                "schema": {
+                    "type": "object",
+                    "properties": {"expression": {"type": "string"}},
+                },
+            },
+            headers=_hdr(token, org_id),
+        )
+    ).json()
+
+
+def _tool_call(name="计算器", expression="1+1", call_id="call_1"):
+    return {
+        "id": call_id,
+        "name": name,
+        "arguments": {"expression": expression},
+        "args_error": None,
+    }
+
+
+async def test_tool_calling_loop_success(client, monkeypatch):
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = await _create_agent(client, token, org["id"])
+    # Agent 级绑定（工具实时读取，D05）
+    tool = await _create_calc_tool(client, token, org["id"])
+    assert (
+        await client.post(
+            f"/api/v1/agents/{agent['id']}/tools",
+            json={"tool_id": tool["id"]},
+            headers=_hdr(token, org["id"]),
+        )
+    ).status_code == 201
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
+
+    monkeypatch.setattr(
+        llm_module.LLMClient,
+        "chat_stream",
+        _fake_tool_loop(
+            [
+                {"deltas": ["让我"], "tool_calls": [_tool_call()]},
+                {"deltas": ["答案是 2"]},
+            ]
+        ),
+    )
+    async with client.stream(
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "1+1 等于几"},
+        headers=_hdr(token, org["id"]),
+    ) as resp:
+        events = await _read_sse(resp)
+
+    kinds = [e for e, _ in events if e is not None]
+    assert kinds == ["message", "tool_call", "tool_result", "message", "done"]
+    call_evt = next(d for e, d in events if e == "tool_call")
+    assert call_evt == {
+        "round": 1,
+        "name": "计算器",
+        "arguments": {"expression": "1+1"},
+    }
+    result_evt = next(d for e, d in events if e == "tool_result")
+    assert result_evt == {"round": 1, "name": "计算器", "status": "ok", "output": "2"}
+
+    done = next(d for e, d in events if e == "done")
+    assert done["message_id"] is not None
+    # 两轮 usage 求和（_merge_usage）
+    assert done["token_usage"]["total_tokens"] == 30
+    assert done["tool_calls"] == [
+        {
+            "round": 1,
+            "name": "计算器",
+            "arguments": {"expression": "1+1"},
+            "status": "ok",
+            "output": "2",
+            "error": None,
+        }
+    ]
+
+    # 落库：仅 user + 最终 assistant（中间轮不落库，D10）；轨迹随 metadata 持久化
+    messages = (
+        await client.get(
+            f"/api/v1/conversations/{conv['id']}/messages",
+            headers=_hdr(token, org["id"]),
+        )
+    ).json()
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[1]["content"] == "答案是 2"
+    assert messages[1]["metadata_json"]["tool_calls"][0]["status"] == "ok"
+    assert messages[1]["metadata_json"]["tool_calls_max_rounds"] is False
+
+
+async def test_tool_calling_error_degraded(client, monkeypatch):
+    """工具执行失败（除零）不中断对话：error 结果回传 LLM（D11），终答正常落库"""
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = await _create_agent(client, token, org["id"])
+    tool = await _create_calc_tool(client, token, org["id"])
+    await client.post(
+        f"/api/v1/agents/{agent['id']}/tools",
+        json={"tool_id": tool["id"]},
+        headers=_hdr(token, org["id"]),
+    )
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
+
+    monkeypatch.setattr(
+        llm_module.LLMClient,
+        "chat_stream",
+        _fake_tool_loop(
+            [
+                {"deltas": [], "tool_calls": [_tool_call(expression="1/0")]},
+                {"deltas": ["无法计算该表达式"]},
+            ]
+        ),
+    )
+    async with client.stream(
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "算一下 1/0"},
+        headers=_hdr(token, org["id"]),
+    ) as resp:
+        events = await _read_sse(resp)
+
+    result_evt = next(d for e, d in events if e == "tool_result")
+    assert result_evt["status"] == "error"
+    assert result_evt["output"]  # 错误信息作为 tool 结果回传
+    done = next(d for e, d in events if e == "done")
+    assert done["message_id"] is not None
+    assert done["tool_calls"][0]["status"] == "error"
+    stored = (
+        await client.get(
+            f"/api/v1/conversations/{conv['id']}/messages",
+            headers=_hdr(token, org["id"]),
+        )
+    ).json()
+    assert stored[-1]["content"] == "无法计算该表达式"
+
+
+async def test_tool_calling_max_rounds(client, monkeypatch):
+    """LLM 每轮都索要工具 → 5 轮上限强制终结（D09），trace 标记 max_rounds"""
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = await _create_agent(client, token, org["id"])
+    tool = await _create_calc_tool(client, token, org["id"])
+    await client.post(
+        f"/api/v1/agents/{agent['id']}/tools",
+        json={"tool_id": tool["id"]},
+        headers=_hdr(token, org["id"]),
+    )
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
+
+    rounds = [
+        {"deltas": [], "tool_calls": [_tool_call(expression="1+1", call_id=f"c{i}")]}
+        for i in range(1, 6)
+    ]
+    monkeypatch.setattr(llm_module.LLMClient, "chat_stream", _fake_tool_loop(rounds))
+    async with client.stream(
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "循环提问"},
+        headers=_hdr(token, org["id"]),
+    ) as resp:
+        events = await _read_sse(resp)
+
+    # 5 轮 × 每轮一个调用
+    assert [e for e, _ in events].count("tool_call") == 5
+    done = next(d for e, d in events if e == "done")
+    assert len(done["tool_calls"]) == 5
+    assert done["tool_calls"][-1]["round"] == 5
+    stored = (
+        await client.get(
+            f"/api/v1/conversations/{conv['id']}/messages",
+            headers=_hdr(token, org["id"]),
+        )
+    ).json()
+    assert stored[-1]["metadata_json"]["tool_calls_max_rounds"] is True
+    assert "轮次上限" in stored[-1]["content"]
+
+
+async def test_tool_calling_disabled_binding_ignored(client, monkeypatch):
+    """enabled=false 的绑定不参与调用（D05）：LLM 请求不带 tools"""
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = await _create_agent(client, token, org["id"])
+    tool = await _create_calc_tool(client, token, org["id"])
+    await client.post(
+        f"/api/v1/agents/{agent['id']}/tools",
+        json={"tool_id": tool["id"], "enabled": False},
+        headers=_hdr(token, org["id"]),
+    )
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
+
+    captured = []
+    monkeypatch.setattr(
+        llm_module.LLMClient, "chat_stream", _fake_chat(["普通回答"], captured=captured)
+    )
+    async with client.stream(
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "你好"},
+        headers=_hdr(token, org["id"]),
+    ) as resp:
+        events = await _read_sse(resp)
+
+    assert captured[0]["tools"] is None
+    done = next(d for e, d in events if e == "done")
+    assert done["tool_calls"] == []
+
+
+async def test_tool_calling_unknown_tool_degrades(client, monkeypatch):
+    """LLM 调用未绑定工具名（agent 级实时读取，D05）：按 error 回传不中断"""
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = await _create_agent(client, token, org["id"])
+    # 绑定一个工具，但 LLM 索要另一个未绑定名称
+    tool = await _create_calc_tool(client, token, org["id"])
+    await client.post(
+        f"/api/v1/agents/{agent['id']}/tools",
+        json={"tool_id": tool["id"]},
+        headers=_hdr(token, org["id"]),
+    )
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
+
+    monkeypatch.setattr(
+        llm_module.LLMClient,
+        "chat_stream",
+        _fake_tool_loop(
+            [
+                {"deltas": [], "tool_calls": [_tool_call(name="幽灵工具")]},
+                {"deltas": ["没有该工具"]},
+            ]
+        ),
+    )
+    async with client.stream(
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "调用幽灵工具"},
+        headers=_hdr(token, org["id"]),
+    ) as resp:
+        events = await _read_sse(resp)
+
+    result_evt = next(d for e, d in events if e == "tool_result")
+    assert result_evt["status"] == "error"
+    assert "不存在" in result_evt["output"]
+    done = next(d for e, d in events if e == "done")
+    assert done["message_id"] is not None
