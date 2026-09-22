@@ -5,13 +5,16 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   agentsPath,
   chatPath,
+  executionsPath,
   knowledgeBasesPath,
   orgMembersPath,
   orgSettingsPath,
   ROUTE_PATHS,
   toolsPath,
 } from '@/constants/routes'
+import { canChatAgent } from '@/constants/agent-options'
 import { useMe } from '@/hooks/useMe'
+import { useOrg } from '@/hooks/useOrg'
 import { useAuthStore } from '@/stores/auth'
 import { useOrganizationStore } from '@/stores/organization'
 import { queryClient } from '@/utils/query-client'
@@ -25,6 +28,7 @@ export default function AppLayout() {
   const currentOrgId = useOrganizationStore((state) => state.currentOrgId)
   const setCurrentOrg = useOrganizationStore((state) => state.setCurrentOrg)
   const { data: me } = useMe()
+  const { data: currentOrg } = useOrg(currentOrgId)
 
   const handleLogout = () => {
     clearTokens()
@@ -118,6 +122,16 @@ export default function AppLayout() {
               AI 对话
             </NavLink>
           )}
+          {/* 执行监控：viewer 不可见（与后端权限矩阵一致，execution.md D3） */}
+          {orgNavDisabled ? (
+            <span className="cursor-not-allowed rounded-lg px-3 py-2 text-sm text-neutral-300">
+              执行监控
+            </span>
+          ) : canChatAgent(currentOrg?.my_role) ? (
+            <NavLink to={executionsPath(currentOrgId)} className={navLinkClass}>
+              执行监控
+            </NavLink>
+          ) : null}
         </nav>
 
         <div className="mt-auto border-t border-neutral-100 pt-4">

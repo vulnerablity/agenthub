@@ -5,6 +5,7 @@
 # → 引用来源随 done.sources / messages.metadata_json 输出；检索异常结构化降级不中断对话（D12）
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -43,6 +44,7 @@ from app.schemas.chat import (
 )
 from app.schemas.knowledge import RAGSource, SearchRequest, rag_config_from
 from app.schemas.tool import ToolCallRun
+from app.services.execution_service import ExecutionService, new_execution_id
 from app.services.knowledge_service import KnowledgeService
 
 DEFAULT_TITLE = "新对话"
@@ -72,6 +74,16 @@ class _StreamCtx:
     # 纯数据结构，避免 ORM 对象在 commit 后过期（tool-calling.md 2.6）
     tools: list[dict]
     tool_map: dict[str, tuple[str, dict | None]]
+    # 执行监控上下文（execution.md）：本次生成的 execution 分组键与埋点所需的归属信息
+    execution_id: str
+    org_id: int
+    user_id: int
+    agent_id: int
+
+
+def _elapsed_ms(started: float) -> int:
+    """单调钟耗时（毫秒，execution.md 步骤计时）"""
+    return max(0, int((time.monotonic() - started) * 1000))
 
 
 def _sse(event: str, payload: BaseModel | dict) -> str:
@@ -114,6 +126,8 @@ class ChatService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.repo = ConversationRepository(db)
+        # 执行监控写入器（execution.md D5：写库失败内部吞掉，不中断对话）
+        self.executions = ExecutionService(db)
         self._stream_ctx: _StreamCtx | None = None
 
     @classmethod
@@ -225,7 +239,7 @@ class ChatService:
         conversation, _ = await self._get_owned(org, user, conversation_id)
         lock = await self._acquire(conversation.id)
         try:
-            return await self._run_generation(org, conversation, content)
+            return await self._run_generation(org, user, conversation, content)
         finally:
             lock.release()
 
@@ -241,7 +255,7 @@ class ChatService:
         if not content:
             raise MessageContentRequired()
         conversation, _ = await self._get_owned(org, user, conversation_id)
-        ctx, _ = await self._prepare_generation(org, conversation, content)
+        ctx, _ = await self._prepare_generation(org, user, conversation, content)
         # 锁在 _prepare_generation 内获取并随 ctx 保持；服务实例持有直至 sse_events 结束
         self._stream_ctx = ctx
 
@@ -316,19 +330,23 @@ class ChatService:
         return row[0], row[0].agent_id
 
     async def _prepare_generation(
-        self, org: Organization, conversation: Conversation, content: str
+        self,
+        org: Organization,
+        user: User,
+        conversation: Conversation,
+        content: str,
     ) -> tuple[_StreamCtx, asyncio.Lock]:
         """通用生成前置：拿锁 → 校验 Agent 可用 → 加载版本快照 → 组上下文（含 RAG）→ 落库用户消息"""
         lock = await self._acquire(conversation.id)
         try:
-            ctx = await self._build_context(org, conversation, content)
+            ctx = await self._build_context(org, user, conversation, content)
         except BaseException:
             lock.release()
             raise
         return ctx, lock
 
     async def _build_context(
-        self, org: Organization, conversation: Conversation, content: str
+        self, org: Organization, user: User, conversation: Conversation, content: str
     ) -> _StreamCtx:
         agent = await self.repo.get_agent(conversation.agent_id)
         # 启停即时生效（agent 模块 D5）：禁用后拒绝继续对话
@@ -346,11 +364,9 @@ class ChatService:
         )
         llm_message = [{"role": "system", "content": version.system_prompt}]
         # RAG 步骤（knowledge.md D11）：检索 → 注入（在 system_prompt 之后、历史消息之前）
+        rag_config = rag_config_from(version.config_json)
+        rag_started = time.monotonic()
         sources, rag_meta = await self._retrieve_rag(org, version, content)
-        if sources:
-            llm_message.append(
-                {"role": "system", "content": self._rag_context_prompt(sources)}
-            )
         # Tool 步骤（tool-calling.md 2.6）：实时加载启用绑定（D05），组装 OpenAI tools 与执行映射
         tools, tool_map = await self._load_agent_tools(conversation.agent_id)
         llm_message += [{"role": m.role, "content": m.content} for m in history]
@@ -361,7 +377,8 @@ class ChatService:
             Message(conversation_id=conversation.id, role="user", content=content)
         )
         await self.db.commit()
-        return _StreamCtx(
+        # 执行监控（execution.md）：execution 分组键 + RAG 检索步骤（仅绑定 KB 时才发生检索）
+        ctx = _StreamCtx(
             conversation=conversation,
             version=version,
             llm_message=llm_message,
@@ -370,7 +387,34 @@ class ChatService:
             rag_meta=rag_meta,
             tools=tools,
             tool_map=tool_map,
+            execution_id=new_execution_id(),
+            org_id=org.id,
+            user_id=user.id,
+            agent_id=conversation.agent_id,
         )
+        if rag_config is not None and rag_config.knowledge_base_ids:
+            await self._record_step(
+                ctx,
+                "rag",
+                "rag_retrieval",
+                "error" if rag_meta.get("degraded") else "success",
+                input_data={
+                    "query": content,
+                    "knowledge_base_ids": rag_config.knowledge_base_ids,
+                    "top_k": rag_config.rag_top_k,
+                },
+                output_data={
+                    "hit_count": len(sources),
+                    "degraded": rag_meta.get("degraded"),
+                    "reason": rag_meta.get("reason"),
+                },
+                duration_ms=_elapsed_ms(rag_started),
+            )
+        if sources:
+            llm_message.insert(
+                1, {"role": "system", "content": self._rag_context_prompt(sources)}
+            )
+        return ctx
 
     async def _load_agent_tools(
         self, agent_id: int
@@ -456,21 +500,60 @@ class ChatService:
             deltas: list[str] = []
             calls: list[dict[str, Any]] = []
             usage: dict[str, Any] | None = None
-            async for item in get_llm_client().chat_stream(
-                messages=llm_message,
-                model=ctx.version.model_name,
-                temperature=ctx.version.temperature,
-                max_tokens=ctx.version.max_tokens,
-                tools=ctx.tools or None,
-            ):
-                if "delta" in item:
-                    deltas.append(item["delta"])
-                    yield ("message", {"delta": item["delta"]})
-                elif "tool_calls" in item:
-                    calls = item["tool_calls"]
-                else:
-                    usage = item.get("usage")
+            round_started = time.monotonic()
+            try:
+                async for item in get_llm_client().chat_stream(
+                    messages=llm_message,
+                    model=ctx.version.model_name,
+                    temperature=ctx.version.temperature,
+                    max_tokens=ctx.version.max_tokens,
+                    tools=ctx.tools or None,
+                ):
+                    if "delta" in item:
+                        deltas.append(item["delta"])
+                        yield ("message", {"delta": item["delta"]})
+                    elif "tool_calls" in item:
+                        calls = item["tool_calls"]
+                    else:
+                        usage = item.get("usage")
+            except (LLMUpstreamError, LLMTimeout) as exc:
+                # 执行监控（execution.md）：上游失败在 error SSE 之前留痕，便于链路排查
+                await self._record_step(
+                    ctx,
+                    "llm",
+                    f"llm_round_{rnd}",
+                    "error",
+                    input_data={
+                        "round": rnd,
+                        "model": ctx.version.model_name,
+                        "message_count": len(llm_message),
+                        "tools_enabled": len(ctx.tools),
+                    },
+                    output_data={"error_code": exc.code},
+                    duration_ms=_elapsed_ms(round_started),
+                )
+                raise
             total_usage = _merge_usage(total_usage, usage)
+            latency_ms = _elapsed_ms(round_started)
+            # 执行监控（execution.md）：每轮 LLM 调用记 step + 用量（token/耗时，验收 10）
+            await self._record_usage(ctx, rnd, usage, latency_ms)
+            await self._record_step(
+                ctx,
+                "llm",
+                f"llm_round_{rnd}",
+                "success",
+                input_data={
+                    "round": rnd,
+                    "model": ctx.version.model_name,
+                    "message_count": len(llm_message),
+                    "tools_enabled": len(ctx.tools),
+                },
+                output_data={
+                    "has_tool_calls": bool(calls),
+                    "output_chars": len("".join(deltas)),
+                },
+                duration_ms=latency_ms,
+            )
             if not calls:
                 # LLM 不再索要工具 → 终答
                 yield (
@@ -499,6 +582,7 @@ class ChatService:
                     {"round": rnd, "name": name, "arguments": arguments},
                 )
                 runner = ctx.tool_map.get(name)
+                tool_started = time.monotonic()
                 if runner is None:
                     result = ToolResult.failed(f"当前配置中不存在工具 {name}")
                 elif call.get("args_error"):
@@ -506,6 +590,20 @@ class ChatService:
                 else:
                     # 错误不外抛（D11）：工具执行失败以 error 结果回传 LLM
                     result = await run_tool(runner[0], runner[1], arguments)
+                # 执行监控（execution.md）：一次工具调用一步（含参数/结果，超长 JSON 由 Service 截断）
+                await self._record_step(
+                    ctx,
+                    "tool",
+                    f"tool_{name}",
+                    "success" if result.status == "ok" else "error",
+                    input_data={"round": rnd, "name": name, "arguments": arguments},
+                    output_data={
+                        "status": result.status,
+                        "output": result.output,
+                        "error": result.error,
+                    },
+                    duration_ms=_elapsed_ms(tool_started),
+                )
                 trace.append(
                     {
                         "round": rnd,
@@ -544,11 +642,15 @@ class ChatService:
         )
 
     async def _run_generation(
-        self, org: Organization, conversation: Conversation, content: str
+        self,
+        org: Organization,
+        user: User,
+        conversation: Conversation,
+        content: str,
     ) -> MessageDetail:
         """同步生成：复用 _build_context 后经 _agent_loop 收集完整回答并落库
         （流式走 prepare_stream/sse_events，两条路径共用同一循环逻辑）"""
-        ctx = await self._build_context(org, conversation, content)
+        ctx = await self._build_context(org, user, conversation, content)
         final: dict[str, Any] | None = None
         async for event, payload in self._agent_loop(ctx):
             if event == "done":
@@ -605,6 +707,49 @@ class ChatService:
         await self.db.commit()
         await self.db.refresh(assistant)
         return assistant
+
+    # ---------- 执行监控埋点（execution.md：失败不外抛，D5 由 ExecutionService 兜底） ----------
+
+    async def _record_step(
+        self,
+        ctx: _StreamCtx,
+        step_type: str,
+        step_name: str,
+        status: str,
+        input_data: dict[str, Any] | None = None,
+        output_data: dict[str, Any] | None = None,
+        duration_ms: int = 0,
+    ) -> None:
+        """一次执行步骤落库（llm 轮次 / rag 检索 / tool 调用）"""
+        await self.executions.record_step(
+            execution_id=ctx.execution_id,
+            org_id=ctx.org_id,
+            user_id=ctx.user_id,
+            agent_id=ctx.agent_id,
+            conversation_id=ctx.conversation.id,
+            step_type=step_type,
+            step_name=step_name,
+            status=status,
+            input_data=input_data,
+            output_data=output_data,
+            duration_ms=duration_ms,
+        )
+
+    async def _record_usage(
+        self, ctx: _StreamCtx, round: int, usage: dict[str, Any] | None, latency_ms: int
+    ) -> None:
+        """一轮 LLM 调用的 token/耗时落库（tool-calling 多轮 → 多条）"""
+        await self.executions.record_usage(
+            execution_id=ctx.execution_id,
+            org_id=ctx.org_id,
+            agent_id=ctx.agent_id,
+            conversation_id=ctx.conversation.id,
+            provider=ctx.version.model_provider,
+            model=ctx.version.model_name,
+            round=round,
+            usage=usage,
+            latency_ms=latency_ms,
+        )
 
     @staticmethod
     def _message_detail(message: Message) -> MessageDetail:

@@ -85,7 +85,9 @@ async def _cleanup(engine):
         Conversation,
         Document,
         DocumentChunk,
+        ExecutionStep,
         KnowledgeBase,
+        LLMUsageLog,
         Message,
         Organization,
         OrganizationMember,
@@ -96,6 +98,9 @@ async def _cleanup(engine):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         # 外键顺序：消息 → 会话 → 版本 → 智能体 → 绑定 → 切块 → 文档 → 知识库 → 工具 → 成员 → 组织 → 用户
+        # 执行日志两表无外键（审计数据），最先清理
+        await session.execute(delete(ExecutionStep))
+        await session.execute(delete(LLMUsageLog))
         await session.execute(delete(Message))
         await session.execute(delete(Conversation))
         await session.execute(delete(AgentVersion))

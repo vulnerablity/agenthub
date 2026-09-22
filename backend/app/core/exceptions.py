@@ -284,3 +284,11 @@ class AgentToolAlreadyBound(AppError):
 class AgentToolNotFound(AppError):
     def __init__(self) -> None:
         super().__init__(404, "AGENT_TOOL_NOT_FOUND", "智能体未绑定该工具")
+
+
+# 执行监控域错误码（execution log 模块）
+
+
+class ExecutionNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "EXECUTION_NOT_FOUND", "执行记录不存在")

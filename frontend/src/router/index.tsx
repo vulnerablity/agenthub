@@ -21,6 +21,8 @@ import KnowledgeBaseDetail from '@/pages/knowledge/Detail'
 import ToolList from '@/pages/tools/List'
 import ToolForm from '@/pages/tools/Form'
 import ToolDetail from '@/pages/tools/Detail'
+import ExecutionList from '@/pages/executions/List'
+import ExecutionDetail from '@/pages/executions/Detail'
 import RequireAuth from './RequireAuth'
 
 export const router = createBrowserRouter([
@@ -54,6 +56,8 @@ export const router = createBrowserRouter([
           { path: ROUTE_PATHS.TOOL_NEW, element: <ToolForm /> },
           { path: ROUTE_PATHS.TOOL_DETAIL, element: <ToolDetail /> },
           { path: ROUTE_PATHS.TOOL_EDIT, element: <ToolForm /> },
+          { path: ROUTE_PATHS.EXECUTIONS, element: <ExecutionList /> },
+          { path: ROUTE_PATHS.EXECUTION_DETAIL, element: <ExecutionDetail /> },
         ],
       },
     ],

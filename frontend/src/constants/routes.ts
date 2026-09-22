@@ -22,6 +22,8 @@ export const ROUTE_PATHS = {
   TOOL_NEW: '/organizations/:orgId/tools/new',
   TOOL_DETAIL: '/organizations/:orgId/tools/:toolId',
   TOOL_EDIT: '/organizations/:orgId/tools/:toolId/edit',
+  EXECUTIONS: '/organizations/:orgId/executions',
+  EXECUTION_DETAIL: '/organizations/:orgId/executions/:executionId',
 } as const
 
 /** 生成带组织 id 的成员管理路径 */
@@ -119,4 +121,17 @@ export function toolDetailPath(orgId: number | string, toolId: number | string):
 /** 生成带组织与工具 id 的编辑路径 */
 export function toolEditPath(orgId: number | string, toolId: number | string): string {
   return `/organizations/${orgId}/tools/${toolId}/edit`
+}
+
+/** 生成带组织 id 的执行监控列表路径 */
+export function executionsPath(orgId: number | string): string {
+  return `/organizations/${orgId}/executions`
+}
+
+/** 生成带组织与执行 id 的详情路径 */
+export function executionDetailPath(
+  orgId: number | string,
+  executionId: string,
+): string {
+  return `/organizations/${orgId}/executions/${executionId}`
 }
