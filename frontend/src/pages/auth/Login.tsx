@@ -1,5 +1,5 @@
 // pages/auth/Login.tsx
-// 登录页：邮箱 + 密码，成功后持久化双 Token 并回跳来源页
+// 登录页：分屏品牌区 + 表单；成功后持久化双 Token 并回跳来源页
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { authApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { errorMessage } from '@/constants/error-messages'
 import { ROUTE_PATHS } from '@/constants/routes'
@@ -56,51 +57,99 @@ export default function Login() {
   })
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
-        noValidate
-      >
-        <h1 className="text-xl font-semibold text-neutral-900">登录 AgentHub</h1>
-        <p className="mt-1 text-sm text-neutral-500">欢迎回来，请输入账号信息</p>
+    <div className="login-page">
+      <div className="login-wrap">
+        <aside className="login-brand">
+          <div className="rel">
+            <div className="lb-head">
+              <span className="tb-logo">
+                <Icon name="spark" width={19} height={19} color="#fff" />
+              </span>
+              <span>AgentHub</span>
+            </div>
+            <p className="lb-tag">ENTERPRISE AGENT PLATFORM</p>
 
-        <div className="mt-6 flex flex-col gap-4">
-          <TextField
-            label="邮箱"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            error={errors.email?.message}
-            {...register('email')}
-          />
-          <TextField
-            label="密码"
-            type="password"
-            autoComplete="current-password"
-            placeholder="请输入密码"
-            error={errors.password?.message}
-            {...register('password')}
-          />
-        </div>
+            <h2>
+              让团队把 <em>AI Agent</em>
+              <br />
+              真正用起来
+            </h2>
+            <p className="lb-sub">
+              统一管理企业智能体、知识库与工具，
+              <br />
+              让每一次对话都有据可依、每一次执行都可追溯。
+            </p>
 
-        {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+            <div className="lb-feats">
+              <div className="lb-feat">
+                <Icon name="bot" className="ic" />
+                基于企业知识库的智能体问答与编排
+              </div>
+              <div className="lb-feat">
+                <Icon name="layers" className="ic" />
+                全链路执行监控与 Token 用量审计
+              </div>
+              <div className="lb-feat">
+                <Icon name="shield" className="ic" />
+                组织级权限隔离与数据安全
+              </div>
+            </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="mt-6 w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isSubmitting ? '登录中…' : '登录'}
-        </button>
+            <p className="lb-foot">AgentHub · 企业智能体平台</p>
+          </div>
+        </aside>
 
-        <p className="mt-4 text-center text-sm text-neutral-500">
-          还没有账号？
-          <Link to={ROUTE_PATHS.REGISTER} className="font-medium text-indigo-600 hover:underline">
-            立即注册
-          </Link>
-        </p>
-      </form>
+        <section className="login-form">
+          <h1 className="lf-title">欢迎回来</h1>
+          <p className="lf-sub">登录 AgentHub 工作台，继续管理你的智能体</p>
+
+          <form onSubmit={onSubmit} noValidate>
+            <div className="fields">
+              <TextField
+                label="邮箱"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                error={errors.email?.message}
+                {...register('email')}
+              />
+              <TextField
+                label="密码"
+                type="password"
+                autoComplete="current-password"
+                placeholder="请输入密码"
+                error={errors.password?.message}
+                {...register('password')}
+              />
+            </div>
+
+            <div className="lf-links">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 rounded accent-[#5b5bd6]"
+                  defaultChecked
+                />
+                记住我
+              </label>
+              <a href="#" onClick={(e) => e.preventDefault()}>
+                忘记密码？
+              </a>
+            </div>
+
+            {apiError ? <p className="mt-3 text-sm text-red-500">{apiError}</p> : null}
+
+            <button type="submit" disabled={isSubmitting} className="btn primary mt-5">
+              {isSubmitting ? '登录中…' : '登 录'}
+            </button>
+
+            <p className="lf-foot">
+              还没有账号？
+              <Link to={ROUTE_PATHS.REGISTER}>立即注册</Link>
+            </p>
+          </form>
+        </section>
+      </div>
     </div>
   )
 }

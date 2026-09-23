@@ -8,6 +8,7 @@ import { useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { organizationApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { errorMessage } from '@/constants/error-messages'
 import { ASSIGNABLE_ROLES, ORG_ROLE_LABELS } from '@/constants/org-roles'
@@ -107,7 +108,7 @@ export default function Members() {
   })
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   const onAdd = handleAddSubmit((values) => {
@@ -136,10 +137,10 @@ export default function Members() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="flex items-center justify-between">
+      <div className="page-head">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">成员管理</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <h1 className="page-title">成员管理</h1>
+          <p className="page-sub">
             {org ? `${org.name} · ${org.member_count} 名成员` : '加载中…'}
           </p>
         </div>
@@ -147,20 +148,20 @@ export default function Members() {
           <button
             type="button"
             onClick={() => setShowAddForm((v) => !v)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="btn primary"
           >
+            <Icon name={showAddForm ? 'x' : 'plus'} className="ic" />
             {showAddForm ? '收起' : '添加成员'}
           </button>
         ) : null}
       </div>
 
       {showAddForm && canManage ? (
-        <form
-          onSubmit={onAdd}
-          noValidate
-          className="mt-6 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
-        >
-          <h3 className="text-sm font-semibold text-neutral-900">添加已注册用户</h3>
+        <form onSubmit={onAdd} noValidate className="card card-pad mt-4">
+          <h3 className="card-title">
+            <Icon name="users" className="ic" />
+            添加已注册用户
+          </h3>
           <div className="mt-4 flex items-end gap-3">
             <div className="flex-1">
               <TextField
@@ -171,15 +172,11 @@ export default function Members() {
                 {...registerAdd('email')}
               />
             </div>
-            <div className="flex flex-col gap-2">
-              <label htmlFor="add-role" className="text-sm font-medium text-neutral-700">
+            <div className="field">
+              <label htmlFor="add-role" className="lbl">
                 角色
               </label>
-              <select
-                id="add-role"
-                {...registerAdd('role')}
-                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-              >
+              <select id="add-role" className="select" {...registerAdd('role')}>
                 {ASSIGNABLE_ROLES.map((role) => (
                   <option key={role} value={role}>
                     {ORG_ROLE_LABELS[role]}
@@ -190,7 +187,7 @@ export default function Members() {
             <button
               type="submit"
               disabled={addMutation.isPending}
-              className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn primary"
             >
               {addMutation.isPending ? '添加中…' : '添加'}
             </button>
@@ -198,29 +195,31 @@ export default function Members() {
         </form>
       ) : null}
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      <div className="mt-6 max-w-sm">
-        <TextField
-          label="搜索成员"
-          type="search"
-          placeholder="按邮箱模糊搜索"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+      <div className="mt-5 max-w-sm">
+        <div className="input">
+          <Icon name="search" className="ic" />
+          <input
+            type="search"
+            placeholder="按邮箱搜索成员…"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div className="table-wrap mt-4">
         {isPending ? (
-          <p className="p-6 text-sm text-neutral-500">加载中…</p>
+          <p className="p-6 muted">加载中…</p>
         ) : members && members.length > 0 ? (
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-neutral-100 text-xs text-neutral-400">
+          <table className="tbl">
+            <thead>
               <tr>
-                <th className="px-4 py-3 font-medium">成员</th>
-                <th className="px-4 py-3 font-medium">角色</th>
-                <th className="px-4 py-3 font-medium">加入时间</th>
-                <th className="px-4 py-3 font-medium">操作</th>
+                <th>成员</th>
+                <th>角色</th>
+                <th>加入时间</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -230,27 +229,28 @@ export default function Members() {
                 const removable = canRemove(myRole, m.role, isSelf)
                 const leavable = isSelf && m.role !== 'owner'
                 return (
-                  <tr key={m.user_id} className="border-b border-neutral-50 last:border-0">
-                    <td className="px-4 py-3">
+                  <tr key={m.user_id}>
+                    <td>
                       <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-medium text-indigo-700">
+                        <span className={`avatar sm ${avatarTone(m.email)}`}>
                           {(m.username || m.email).slice(0, 1).toUpperCase()}
                         </span>
                         <div>
-                          <p className="font-medium text-neutral-900">
+                          <p className="font-semibold">
                             {m.username}
-                            {isSelf ? <span className="ml-1 text-xs text-neutral-400">（我）</span> : null}
+                            {isSelf ? <span className="ml-1 text-[12px] muted">（我）</span> : null}
                           </p>
-                          <p className="text-xs text-neutral-400">{m.email}</p>
+                          <p className="text-[12px] muted">{m.email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       {assignable ? (
                         <select
                           value={m.role}
                           onChange={(e) => handleRoleChange(m.user_id, e.target.value as AssignableRole)}
-                          className="rounded-lg border border-neutral-300 px-2 py-1 text-sm text-neutral-900 outline-none transition focus:border-indigo-500"
+                          className="select"
+                          style={{ padding: '4px 8px', fontSize: '12.5px' }}
                         >
                           {(myRole === 'owner'
                             ? (['admin', 'member', 'viewer'] as const)
@@ -262,30 +262,24 @@ export default function Members() {
                           ))}
                         </select>
                       ) : (
-                        <span className="rounded-full bg-indigo-50 px-3 py-0.5 text-xs font-medium text-indigo-700">
+                        <span className={`badge ${m.role === 'owner' ? 'accent' : m.role === 'admin' ? 'info' : 'off'}`}>
                           {ORG_ROLE_LABELS[m.role]}
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-neutral-500">
-                      {new Date(m.joined_at).toLocaleDateString('zh-CN')}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="muted">{new Date(m.joined_at).toLocaleDateString('zh-CN')}</td>
+                    <td>
                       {removable ? (
                         <button
                           type="button"
                           onClick={() => handleRemove(m.user_id, m.username)}
-                          className="rounded-lg border border-red-200 px-3 py-1 text-xs text-red-600 transition hover:bg-red-50"
+                          className="btn xs danger-ghost"
                         >
                           移除
                         </button>
                       ) : null}
                       {leavable ? (
-                        <button
-                          type="button"
-                          onClick={handleLeave}
-                          className="rounded-lg border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition hover:bg-neutral-100"
-                        >
+                        <button type="button" onClick={handleLeave} className="btn xs ghost">
                           退出组织
                         </button>
                       ) : null}
@@ -296,11 +290,21 @@ export default function Members() {
             </tbody>
           </table>
         ) : (
-          <p className="p-6 text-sm text-neutral-500">
-            {email ? '没有匹配的成员' : '暂无成员'}
-          </p>
+          <div className="empty" style={{ padding: '40px 16px' }}>
+            <Icon name="users" className="ic" />
+            <p>{email ? '没有匹配的成员' : '暂无成员'}</p>
+          </div>
         )}
       </div>
     </div>
   )
+}
+
+/** 根据邮箱稳定映射头像渐变 */
+function avatarTone(email: string): string {
+  let hash = 0
+  for (let i = 0; i < email.length; i += 1) {
+    hash = (hash * 31 + email.charCodeAt(i)) % 997
+  }
+  return `av-${(hash % 6) + 1}`
 }

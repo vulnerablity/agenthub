@@ -2,9 +2,9 @@
 // 会话列表：Agent 选择新建 + 当前用户会话（标题/摘要/时间）+ 选中高亮 + 删除（二次确认）
 import { useState } from 'react'
 
-import type { ConversationListItem } from '@/types'
+import Icon from '@/components/Icon'
+import type { ConversationListItem, AgentListItem } from '@/types'
 import { AGENT_STATUS_LABELS } from '@/constants/agent-options'
-import type { AgentListItem } from '@/types'
 
 interface SessionListProps {
   conversations: ConversationListItem[]
@@ -38,14 +38,14 @@ export default function SessionList({
   }
 
   return (
-    <div className="flex h-full w-64 shrink-0 flex-col border-r border-neutral-200 bg-white">
-      <div className="border-b border-neutral-100 p-3">
+    <div className="chat-side">
+      <div className="chat-side-head">
         {creatingOpen ? (
           <div className="flex flex-col gap-2">
             <select
               value={agentId ?? ''}
               onChange={(e) => setAgentId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className="select w-full"
             >
               <option value="">选择智能体…</option>
               {agents.map((agent) => (
@@ -59,7 +59,7 @@ export default function SessionList({
                 type="button"
                 disabled={agentId == null || creating}
                 onClick={confirmCreate}
-                className="flex-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn primary sm flex-1"
               >
                 {creating ? '创建中…' : '开始对话'}
               </button>
@@ -69,7 +69,7 @@ export default function SessionList({
                   setCreatingOpen(false)
                   setAgentId(null)
                 }}
-                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition hover:bg-neutral-100"
+                className="btn ghost sm"
               >
                 取消
               </button>
@@ -79,18 +79,19 @@ export default function SessionList({
           <button
             type="button"
             onClick={() => setCreatingOpen(true)}
-            className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="btn primary w-full"
           >
+            <Icon name="plus" className="ic" />
             新建会话
           </button>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="chat-side-body">
         {conversations.length === 0 ? (
-          <p className="p-3 text-xs text-neutral-400">暂无会话，点击「新建会话」开始</p>
+          <p className="p-3 text-[12px] muted">暂无会话，点击「新建会话」开始</p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="flex flex-col gap-0.5">
             {conversations.map((conv) => {
               const isActive = conv.id === activeId
               // 会话对应智能体被停用时展示状态标签（后端同样拒绝继续对话）
@@ -104,25 +105,17 @@ export default function SessionList({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') onSelect(conv.id)
                     }}
-                    className={`group w-full cursor-pointer rounded-xl px-3 py-2 text-left transition ${
-                      isActive ? 'bg-indigo-50' : 'hover:bg-neutral-50'
-                    }`}
+                    className={`session-item${isActive ? ' active' : ''}`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <p
-                        className={`min-w-0 flex-1 truncate text-sm ${
-                          isActive ? 'font-medium text-indigo-700' : 'text-neutral-900'
-                        }`}
-                      >
-                        {conv.title}
-                      </p>
+                      <p className="t">{conv.title}</p>
                       {agentStatus != null && agentStatus !== 'enabled' ? (
-                        <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] text-neutral-500">
+                        <span className="badge off shrink-0" style={{ padding: '0 6px' }}>
                           {AGENT_STATUS_LABELS[agentStatus]}
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-neutral-400">
+                    <p className="m">
                       <span className="truncate">{conv.agent_name}</span>
                       {conv.last_message_at ? (
                         <span className="shrink-0">
@@ -131,9 +124,7 @@ export default function SessionList({
                       ) : null}
                     </p>
                     {conv.last_message_preview ? (
-                      <p className="mt-0.5 truncate text-xs text-neutral-500">
-                        {conv.last_message_preview}
-                      </p>
+                      <p className="p">{conv.last_message_preview}</p>
                     ) : null}
                     <button
                       type="button"
@@ -144,7 +135,7 @@ export default function SessionList({
                           onDelete(conv.id)
                         }
                       }}
-                      className="mt-1 hidden text-[11px] text-red-400 transition hover:text-red-600 group-hover:inline"
+                      className="session-del"
                     >
                       删除
                     </button>

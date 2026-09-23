@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
 import { toolApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { errorMessage } from '@/constants/error-messages'
 import { HTTP_TOOL_TEMPLATES, applyTemplate } from '@/constants/tool-templates'
@@ -51,11 +52,11 @@ export default function ToolForm() {
   }
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   if (isEdit && !existing) {
-    return <p className="text-sm text-neutral-500">工具不存在</p>
+    return <p className="muted">工具不存在</p>
   }
 
   const handleTemplate = (templateKey: string) => {
@@ -121,19 +122,20 @@ export default function ToolForm() {
         onClick={() =>
           isEdit ? navigate(toolDetailPath(orgId, toolId)) : navigate(toolsPath(orgId))
         }
-        className="text-sm text-neutral-500 transition hover:text-neutral-700"
+        className="btn ghost xs"
       >
-        ← 返回
+        <Icon name="back" className="ic" />
+        返回
       </button>
 
-      <h2 className="mt-4 text-xl font-semibold text-neutral-900">
-        {isEdit ? '编辑工具' : '新建工具'}
-      </h2>
+      <div className="page-head mt-4">
+        <div>
+          <h1 className="page-title">{isEdit ? '编辑工具' : '新建工具'}</h1>
+          <p className="page-sub">Agent 可调用的外部工具（计算器 / HTTP）</p>
+        </div>
+      </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="mt-6 space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
-      >
+      <form onSubmit={handleSubmit} className="card card-pad mt-5 flex flex-col gap-5">
         <TextField
           label="名称"
           placeholder="例如：费用计算器"
@@ -143,21 +145,21 @@ export default function ToolForm() {
           maxLength={100}
         />
 
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-neutral-700">描述</label>
+        <div className="field">
+          <label className="lbl">描述</label>
           <textarea
             rows={3}
             placeholder="工具用途（将作为 LLM 选择工具的依据）"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={5000}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="w-full resize-y rounded-[10px] border border-[var(--line-2)] px-3.5 py-2.5 outline-none transition placeholder:text-[#b3b9ce] focus:border-[var(--accent)] focus:ring-2 focus:ring-[#e4e6ff]"
           />
         </div>
 
         {!isEdit ? (
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-neutral-700">工具类型</label>
+          <div className="field">
+            <label className="lbl">工具类型</label>
             <div className="flex gap-2">
               {(
                 [
@@ -175,14 +177,22 @@ export default function ToolForm() {
                       setConfigText('')
                     }
                   }}
-                  className={`flex-1 rounded-xl border-2 px-4 py-3 text-left transition ${
+                  className={`flex-1 rounded-[12px] border-2 px-4 py-3 text-left transition ${
                     type === option.key
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-neutral-200 bg-white hover:border-neutral-300'
+                      ? 'border-[var(--accent)] bg-[var(--accent-soft)]'
+                      : 'border-[var(--line)] bg-white hover:border-[#cfd3e4]'
                   }`}
                 >
-                  <p className="text-sm font-medium text-neutral-900">{option.label}</p>
-                  <p className="mt-0.5 text-xs text-neutral-500">{option.hint}</p>
+                  <p className="flex items-center gap-1.5 text-[13.5px] font-semibold">
+                    <Icon
+                      name={option.key === 'calculator' ? 'zap' : 'globe'}
+                      width={15}
+                      height={15}
+                      style={{ color: 'var(--accent-ink)' }}
+                    />
+                    {option.label}
+                  </p>
+                  <p className="mt-0.5 text-[12px] muted">{option.hint}</p>
                 </button>
               ))}
             </div>
@@ -190,16 +200,17 @@ export default function ToolForm() {
         ) : null}
 
         {showHttpConfig ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-neutral-700">HTTP 配置（JSON）</label>
+          <div className="field">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="lbl">HTTP 配置（JSON）</label>
               <div className="flex gap-2">
                 {HTTP_TOOL_TEMPLATES.map((template) => (
                   <button
                     key={template.key}
                     type="button"
                     onClick={() => handleTemplate(template.key)}
-                    className="rounded-lg border border-emerald-300 px-2.5 py-1 text-xs text-emerald-700 transition hover:bg-emerald-50"
+                    className="btn xs ghost"
+                    style={{ color: 'var(--success)', borderColor: '#b9e4d6' }}
                   >
                     {template.label} 模板
                   </button>
@@ -209,40 +220,49 @@ export default function ToolForm() {
             <textarea
               rows={7}
               spellCheck={false}
-              placeholder={'{\n  "url": "https://api.example.com/...",\n  "method": "GET",\n  "headers": {},\n  "body": null\n}'}
+              placeholder={
+                '{\n  "url": "https://api.example.com/...",\n  "method": "GET",\n  "headers": {},\n  "body": null\n}'
+              }
               value={configText}
               onChange={(e) => setConfigText(e.target.value)}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 font-mono text-xs text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className="w-full resize-y rounded-[10px] border border-[var(--line-2)] px-3.5 py-2.5 mono text-[12px] outline-none transition placeholder:text-[#b3b9ce] focus:border-[var(--accent)] focus:ring-2 focus:ring-[#e4e6ff]"
             />
-            <p className="text-xs text-neutral-400">
+            <p className="mt-1 text-[12px] muted">
               url 支持 {'{key}'} 占位符注入 LLM 传入参数（如 {'{city}'}）；body 为字符串或 JSON 对象
             </p>
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-neutral-700">
-            输入参数 Schema（JSON，决定 LLM 调用参数形状）
-          </label>
+        <div className="field">
+          <label className="lbl">输入参数 Schema（JSON，决定 LLM 调用参数形状）</label>
           {type === 'calculator' ? (
-            <p className="text-xs text-neutral-400">计算器参数固定为 expression 字符串，无需修改</p>
+            <p className="mt-1 text-[12px] muted">计算器参数固定为 expression 字符串，无需修改</p>
           ) : null}
           <textarea
             rows={7}
             spellCheck={false}
             value={schemaText}
             onChange={(e) => setSchemaText(e.target.value)}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 font-mono text-xs text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="mt-1 w-full resize-y rounded-[10px] border border-[var(--line-2)] px-3.5 py-2.5 mono text-[12px] outline-none transition placeholder:text-[#b3b9ce] focus:border-[var(--accent)] focus:ring-2 focus:ring-[#e4e6ff]"
           />
         </div>
 
-        {apiError ? <p className="text-sm text-red-500">{apiError}</p> : null}
+        {apiError ? <p className="text-[13px] text-red-500">{apiError}</p> : null}
 
-        <div className="flex justify-end">
+        <div className="row-actions">
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() =>
+              isEdit ? navigate(toolDetailPath(orgId, toolId)) : navigate(toolsPath(orgId))
+            }
+          >
+            取消
+          </button>
           <button
             type="submit"
             disabled={submitting || !name.trim()}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn primary"
           >
             {submitting ? '保存中…' : isEdit ? '保存' : '创建'}
           </button>

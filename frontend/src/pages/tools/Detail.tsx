@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import Icon from '@/components/Icon'
 import { canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import { toolEditPath, toolsPath } from '@/constants/routes'
@@ -44,15 +45,15 @@ export default function ToolDetail() {
   }
 
   if (orgId == null || toolId == null || Number.isNaN(orgId) || Number.isNaN(toolId)) {
-    return <p className="text-sm text-neutral-500">参数无效</p>
+    return <p className="muted">参数无效</p>
   }
 
   if (isPending) {
-    return <p className="text-sm text-neutral-500">加载中…</p>
+    return <p className="muted">加载中…</p>
   }
 
   if (!tool) {
-    return <p className="text-sm text-neutral-500">工具不存在</p>
+    return <p className="muted">工具不存在</p>
   }
 
   const test = testMutation.data
@@ -67,46 +68,44 @@ export default function ToolDetail() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <button
-        type="button"
-        onClick={() => navigate(toolsPath(orgId))}
-        className="text-sm text-neutral-500 transition hover:text-neutral-700"
-      >
-        ← 返回工具列表
+    <div>
+      <button type="button" onClick={() => navigate(toolsPath(orgId))} className="btn ghost xs">
+        <Icon name="back" className="ic" />
+        返回工具列表
       </button>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="card card-pad mt-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-base font-medium text-indigo-700">
-            {tool.name.slice(0, 1).toUpperCase()}
+          <span className={`avatar lg ${tool.type === 'http' ? 'av-2' : 'av-3'}`}>
+            <Icon name={tool.type === 'http' ? 'globe' : 'zap'} width={20} height={20} />
           </span>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold text-neutral-900">{tool.name}</h2>
-              <span className="rounded-full bg-neutral-100 px-3 py-0.5 text-xs font-medium text-neutral-600">
+              <h2 className="page-title">{tool.name}</h2>
+              <span className={`badge ${tool.type === 'http' ? 'info' : 'accent'}`}>
                 {TYPE_LABELS[tool.type] ?? tool.type}
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-neutral-400">
+            <p className="mt-1 text-[12.5px] muted">
               更新于 {new Date(tool.updated_at).toLocaleString('zh-CN')}
             </p>
           </div>
         </div>
         {canManage ? (
-          <div className="flex items-center gap-2">
+          <div className="row-actions">
             <button
               type="button"
               onClick={() => navigate(toolEditPath(orgId, tool.id))}
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 transition hover:bg-neutral-100"
+              className="btn ghost sm"
             >
+              <Icon name="edit" className="ic" />
               编辑
             </button>
             <button
               type="button"
               disabled={deleteMutation.isPending}
               onClick={handleDelete}
-              className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn sm danger-ghost"
             >
               {deleteMutation.isPending ? '删除中…' : '删除'}
             </button>
@@ -114,77 +113,85 @@ export default function ToolDetail() {
         ) : null}
       </div>
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-neutral-900">配置</h3>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div>
-              <dt className="text-neutral-400">描述</dt>
-              <dd className="mt-1 text-neutral-900">{tool.description || '暂无描述'}</dd>
+      <div className="grid g2 mt-5">
+        <section className="card card-pad">
+          <h3 className="card-title">
+            <Icon name="settings" className="ic" />
+            配置
+          </h3>
+          <dl className="kv mt-3">
+            <div className="row">
+              <dt>描述</dt>
+              <dd>{tool.description || '暂无描述'}</dd>
             </div>
-            <div>
-              <dt className="text-neutral-400">输入参数 Schema</dt>
-              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-50 p-4 font-mono text-xs leading-relaxed text-neutral-800">
-                {JSON.stringify(tool.schema, null, 2)}
+            <div className="row">
+              <dt>创建时间</dt>
+              <dd>{new Date(tool.created_at).toLocaleString('zh-CN')}</dd>
+            </div>
+            <div className="row">
+              <dt>更新时间</dt>
+              <dd>{new Date(tool.updated_at).toLocaleString('zh-CN')}</dd>
+            </div>
+          </dl>
+          <div className="mt-2">
+            <dt className="muted text-[12px] font-medium">输入参数 Schema</dt>
+            <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-[10px] bg-[#f8f9fd] p-3.5 mono leading-relaxed text-[#141731]">
+              {JSON.stringify(tool.schema, null, 2)}
+            </pre>
+          </div>
+          {tool.type === 'http' ? (
+            <div className="mt-2">
+              <dt className="muted text-[12px] font-medium">HTTP 配置</dt>
+              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-[10px] bg-[#f8f9fd] p-3.5 mono leading-relaxed text-[#141731]">
+                {JSON.stringify(tool.config ?? {}, null, 2)}
               </pre>
             </div>
-            {tool.type === 'http' ? (
-              <div>
-                <dt className="text-neutral-400">HTTP 配置</dt>
-                <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-50 p-4 font-mono text-xs leading-relaxed text-neutral-800">
-                  {JSON.stringify(tool.config ?? {}, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-          </dl>
+          ) : null}
         </section>
 
         {canManage ? (
-          <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h3 className="text-base font-semibold text-neutral-900">测试运行</h3>
-            <label className="mt-4 block text-sm font-medium text-neutral-700">
-              输入参数（JSON，对应 Schema 定义的参数）
-            </label>
-            <textarea
-              rows={5}
-              spellCheck={false}
-              value={argumentsText}
-              onChange={(e) => setArgumentsText(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2 font-mono text-xs text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            />
+          <section className="card card-pad">
+            <h3 className="card-title">
+              <Icon name="zap" className="ic" />
+              测试运行
+            </h3>
+            <div className="field mt-4">
+              <label className="lbl">输入参数（JSON，对应 Schema 定义的参数）</label>
+              <textarea
+                rows={5}
+                spellCheck={false}
+                value={argumentsText}
+                onChange={(e) => setArgumentsText(e.target.value)}
+                className="w-full resize-y rounded-[10px] border border-[var(--line-2)] px-3.5 py-2.5 mono text-[12.5px] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[#e4e6ff]"
+              />
+            </div>
             <button
               type="button"
               disabled={testMutation.isPending}
               onClick={handleTest}
-              className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn primary sm mt-2"
             >
               {testMutation.isPending ? '执行中…' : '执行测试'}
             </button>
 
             {test ? (
-              <div className="mt-4 space-y-3 border-t border-neutral-100 pt-4 text-sm">
+              <div className="mt-4 border-t border-[var(--line)] pt-4">
                 <div className="flex items-center gap-3">
-                  <span
-                    className={`rounded-full px-3 py-0.5 text-xs font-medium ${
-                      test.status === 'ok'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-red-50 text-red-600'
-                    }`}
-                  >
+                  <span className={`badge ${test.status === 'ok' ? 'ok' : 'err'}`}>
                     {test.status === 'ok' ? '成功' : '失败'}
                   </span>
-                  <span className="text-xs text-neutral-400">
-                    耗时 {test.duration_ms} ms
+                  <span className="text-[12px] muted">
+                    耗时 <span className="mono">{test.duration_ms}</span> ms
                   </span>
                 </div>
                 {test.status === 'ok' ? (
-                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-neutral-50 p-4 font-mono text-xs text-neutral-800">
+                  <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-[10px] bg-[#f8f9fd] p-3.5 mono text-[12px] leading-relaxed text-[#141731]">
                     {test.output}
                   </pre>
                 ) : (
-                  <p className="text-sm text-red-600">{test.error ?? test.output}</p>
+                  <p className="mt-3 text-[13px] text-red-600">{test.error ?? test.output}</p>
                 )}
               </div>
             ) : null}

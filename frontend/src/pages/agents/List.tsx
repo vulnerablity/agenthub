@@ -1,11 +1,11 @@
 // pages/agents/List.tsx
-// 智能体列表：搜索与状态过滤 + 卡片网格（名称/当前版本/状态/创建时间）+ 新建入口；管理操作按角色矩阵渲染
+// 智能体列表：搜索 + 状态页签 + 卡片网格（名称/当前版本/状态/创建时间）+ 新建入口；管理操作按角色矩阵渲染
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { agentApi, conversationApi } from '@/api'
-import TextField from '@/components/form/TextField'
+import Icon from '@/components/Icon'
 import { AGENT_STATUS_LABELS, canChatAgent, canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import {
@@ -65,7 +65,7 @@ export default function AgentList() {
   })
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   const handleToggle = (agentId: number, current: AgentStatus) => {
@@ -74,11 +74,11 @@ export default function AgentList() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="page-head">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">智能体管理</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <h1 className="page-title">智能体管理</h1>
+          <p className="page-sub">
             {org ? `${org.name} · 智能体配置、版本与生命周期管理` : '加载中…'}
           </p>
         </div>
@@ -86,103 +86,84 @@ export default function AgentList() {
           <button
             type="button"
             onClick={() => navigate(agentNewPath(orgId))}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="btn primary"
           >
+            <Icon name="plus" className="ic" />
             新建智能体
           </button>
         ) : null}
       </div>
 
-      <div className="mt-6 flex flex-wrap items-end gap-3">
-        <div className="w-64">
-          <TextField
-            label="搜索智能体"
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="input w-72">
+          <Icon name="search" className="ic" />
+          <input
             type="search"
-            placeholder="按名称模糊搜索"
+            placeholder="按名称搜索智能体…"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <div className="flex flex-col gap-2">
-          <label htmlFor="agent-status-filter" className="text-sm font-medium text-neutral-700">
-            状态
-          </label>
-          <select
-            id="agent-status-filter"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as StatusFilter)}
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-          >
-            {STATUS_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+        <div className="tabs">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              className={status === f.value ? 'active' : ''}
+              onClick={() => setStatus(f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
-        <p className="pb-2 text-xs text-neutral-400">
-          {agents ? `共 ${agents.length} 个` : ''}
+        <p className="muted text-[12.5px]">
+          {agents ? `共 ${agents.length} 个智能体` : ''}
         </p>
       </div>
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
       {isPending ? (
-        <p className="mt-6 text-sm text-neutral-500">加载中…</p>
+        <p className="mt-6 muted">加载中…</p>
       ) : agents && agents.length > 0 ? (
-        <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid g2 mt-6 xl:grid-cols-3">
           {agents.map((agent) => {
             const isEnabled = agent.status === 'enabled'
             const toggling =
               toggleStatus.isPending && toggleStatus.variables?.agentId === agent.id
             return (
-              <li
-                key={agent.id}
-                className="flex flex-col justify-between rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
-              >
-                <div>
-                  <div className="flex items-center gap-3">
-                    {agent.avatar_url ? (
-                      <img
-                        src={agent.avatar_url}
-                        alt=""
-                        className="h-9 w-9 shrink-0 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-700">
-                        {agent.name.slice(0, 1).toUpperCase()}
+              <li key={agent.id} className="card card-pad flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  {agent.avatar_url ? (
+                    <img
+                      src={agent.avatar_url}
+                      alt=""
+                      className="avatar md shrink-0 object-cover"
+                    />
+                  ) : (
+                    <span className={`avatar md ${avatarTone(agent.name)}`}>
+                      {agent.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate text-[15px] font-bold">{agent.name}</h3>
+                      <span className={`badge ${isEnabled ? 'ok' : 'off'}`}>
+                        {AGENT_STATUS_LABELS[agent.status]}
                       </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-base font-semibold text-neutral-900">
-                          {agent.name}
-                        </h3>
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            isEnabled
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-neutral-100 text-neutral-500'
-                          }`}
-                        >
-                          {AGENT_STATUS_LABELS[agent.status]}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-neutral-400">
-                        {agent.current_version != null
-                          ? `当前版本 v${agent.current_version}`
-                          : '暂无版本'}
-                      </p>
                     </div>
+                    <p className="mt-0.5 text-[12px] muted">
+                      {agent.current_version != null
+                        ? `当前版本 v${agent.current_version}`
+                        : '暂无版本'}
+                    </p>
                   </div>
-                  <p className="mt-3 line-clamp-2 min-h-8 text-xs text-neutral-500">
-                    {agent.description || '暂无描述'}
-                  </p>
-                  <p className="mt-3 text-xs text-neutral-400">
-                    创建于 {new Date(agent.created_at).toLocaleDateString('zh-CN')}
-                  </p>
                 </div>
-                <div className="mt-4 flex items-center gap-2">
+                <p className="line-clamp-2 min-h-9 text-[13px] muted">
+                  {agent.description || '暂无描述'}
+                </p>
+                <p className="text-[12px] muted">创建于 {formatDate(agent.created_at)}</p>
+                <div className="row-actions mt-1">
                   {canChat && isEnabled ? (
                     <button
                       type="button"
@@ -191,17 +172,22 @@ export default function AgentList() {
                         setApiError('')
                         startChat.mutate(agent.id)
                       }}
-                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="btn primary xs"
                     >
-                      {startChat.isPending && startChat.variables === agent.id
-                        ? '创建中…'
-                        : '对话'}
+                      {startChat.isPending && startChat.variables === agent.id ? (
+                        '创建中…'
+                      ) : (
+                        <>
+                          <Icon name="chat" className="ic" />
+                          对话
+                        </>
+                      )}
                     </button>
                   ) : null}
                   <button
                     type="button"
                     onClick={() => navigate(agentDetailPath(orgId, agent.id))}
-                    className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition hover:bg-neutral-100"
+                    className="btn ghost xs"
                   >
                     查看
                   </button>
@@ -210,7 +196,7 @@ export default function AgentList() {
                       <button
                         type="button"
                         onClick={() => navigate(agentEditPath(orgId, agent.id))}
-                        className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition hover:bg-neutral-100"
+                        className="btn ghost xs"
                       >
                         编辑
                       </button>
@@ -218,11 +204,7 @@ export default function AgentList() {
                         type="button"
                         disabled={toggling}
                         onClick={() => handleToggle(agent.id, agent.status)}
-                        className={`ml-auto rounded-lg px-3 py-1.5 text-xs transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                          isEnabled
-                            ? 'border border-amber-300 text-amber-700 hover:bg-amber-50'
-                            : 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                        }`}
+                        className={`btn xs ml-auto ${isEnabled ? 'danger-ghost' : 'ghost'}`}
                       >
                         {toggling ? '…' : isEnabled ? '停用' : '启用'}
                       </button>
@@ -234,16 +216,42 @@ export default function AgentList() {
           })}
         </ul>
       ) : (
-        <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
-          <p className="text-sm text-neutral-500">
+        <div className="empty mt-6">
+          <Icon name="bot" className="ic" />
+          <p>
             {name || status !== 'all'
               ? '没有匹配的智能体'
               : canManage
                 ? '尚未创建智能体，点击右上角「新建智能体」开始配置'
                 : '该组织暂无智能体'}
           </p>
+          {canManage && !name && status === 'all' ? (
+            <div className="actions">
+              <button
+                type="button"
+                onClick={() => navigate(agentNewPath(orgId))}
+                className="btn primary sm"
+              >
+                <Icon name="plus" className="ic" />
+                新建智能体
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
   )
+}
+
+/** 根据名称稳定映射头像渐变 */
+function avatarTone(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) % 997
+  }
+  return `av-${(hash % 6) + 1}`
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('zh-CN')
 }

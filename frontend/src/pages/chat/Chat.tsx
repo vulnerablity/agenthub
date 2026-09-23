@@ -186,7 +186,7 @@ export default function Chat() {
   })
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   const canChat = canChatAgent(org?.my_role)
@@ -208,7 +208,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+    <div className="chat-shell">
       <SessionList
         conversations={conversations ?? []}
         activeId={conversationId}
@@ -219,42 +219,34 @@ export default function Chat() {
         onDelete={(id) => deleteConversation.mutate(id)}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="chat-main">
         {conversation ? (
           <>
-            <header className="flex items-center gap-2 border-b border-neutral-100 px-5 py-3">
+            <header className="chat-head">
               {conversation.agent_avatar_url ? (
                 <img
                   src={conversation.agent_avatar_url}
                   alt=""
-                  className="h-7 w-7 rounded-full object-cover"
+                  className="avatar sm shrink-0 object-cover"
                 />
               ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-medium text-indigo-700">
+                <span className={`avatar sm ${avatarTone(conversation.agent_name)}`}>
                   {conversation.agent_name.slice(0, 1).toUpperCase()}
                 </span>
               )}
-              <h2 className="text-sm font-semibold text-neutral-900">
-                {conversation.agent_name}
-              </h2>
+              <h2 className="text-[14px] font-bold">{conversation.agent_name}</h2>
               {conversationAgent?.status !== 'enabled' ? (
-                <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-500">
-                  智能体已停用，无法继续对话
-                </span>
+                <span className="badge off">智能体已停用，无法继续对话</span>
               ) : null}
             </header>
 
-            <div
-              ref={scrollRef}
-              onScroll={handleScroll}
-              className="flex-1 space-y-4 overflow-y-auto bg-neutral-50/60 px-5 py-4"
-            >
+            <div ref={scrollRef} onScroll={handleScroll} className="msg-list">
               {messages.length === 0 && !streaming ? (
-                <div className="flex h-full flex-col items-center justify-center text-center">
-                  <p className="text-sm font-medium text-neutral-700">
+                <div className="welcome">
+                  <p className="text-[14px] font-semibold text-[var(--ink-1)]">
                     开始与 {conversation.agent_name} 对话
                   </p>
-                  <p className="mt-1 text-xs text-neutral-400">
+                  <p className="mt-1 text-[12px] muted">
                     基于该会话创建时绑定的版本配置进行回答
                   </p>
                 </div>
@@ -290,12 +282,12 @@ export default function Chat() {
             </div>
 
             {fallbackChatError ? (
-              <p className="border-t border-neutral-100 px-5 py-2 text-xs text-red-500">
+              <p className="border-t border-[var(--line)] px-4 py-2 text-[12px] text-red-500">
                 {fallbackChatError}
               </p>
             ) : null}
 
-            <div className="border-t border-neutral-100 p-4">
+            <div className="chat-input">
               <ChatInput
                 disabled={inputDisabled}
                 streaming={streaming}
@@ -306,7 +298,7 @@ export default function Chat() {
                 }}
               />
               {streaming ? (
-                <p className="mt-2 text-center text-xs text-neutral-400">
+                <p className="mt-2 text-center text-[12px] muted">
                   生成中，点击「停止」可中断（已生成内容将保留，不视为消息完成）
                 </p>
               ) : null}
@@ -342,9 +334,12 @@ function WelcomePanel({
 }) {
   const [agentId, setAgentId] = useState<number | null>(null)
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-      <p className="text-base font-semibold text-neutral-900">AI 对话</p>
-      <p className="mt-1 text-sm text-neutral-500">
+    <div className="welcome">
+      <span className="avatar lg av-1">
+        <span className="text-[22px]">✦</span>
+      </span>
+      <p className="mt-4 text-[16px] font-bold">AI 对话</p>
+      <p className="mt-1 text-[13px] muted">
         选择一个智能体开始新的对话；左侧面板可切换与管理历史会话
       </p>
       {canChat ? (
@@ -352,7 +347,7 @@ function WelcomePanel({
           <select
             value={agentId ?? ''}
             onChange={(e) => setAgentId(e.target.value ? Number(e.target.value) : null)}
-            className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="select flex-1"
           >
             <option value="">选择智能体…</option>
             {agents.map((agent) => (
@@ -365,20 +360,29 @@ function WelcomePanel({
             type="button"
             disabled={agentId == null || creating}
             onClick={() => agentId != null && onCreate(agentId)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn primary"
           >
             {creating ? '创建中…' : '开始对话'}
           </button>
         </div>
       ) : (
-        <p className="mt-6 text-sm text-neutral-400">当前角色仅可查看，无对话权限</p>
+        <p className="mt-6 text-[13px] muted">当前角色仅可查看，无对话权限</p>
       )}
       {canChat && agents.length === 0 ? (
-        <p className="mt-3 text-xs text-neutral-400">
+        <p className="mt-3 text-[12px] muted">
           该组织暂无已启用的智能体，请先在「智能体管理」中创建
         </p>
       ) : null}
-      {error ? <p className="mt-3 text-xs text-red-500">{error}</p> : null}
+      {error ? <p className="mt-3 text-[12px] text-red-500">{error}</p> : null}
     </div>
   )
+}
+
+/** 根据名称稳定映射头像渐变 */
+function avatarTone(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) % 997
+  }
+  return `av-${(hash % 6) + 1}`
 }

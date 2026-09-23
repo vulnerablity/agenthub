@@ -15,22 +15,20 @@ const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextFiel
   const autoId = useId()
   const inputId = id ?? autoId
   return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={inputId} className="text-sm font-medium text-neutral-700">
+    <div className="field">
+      <label htmlFor={inputId} className="lbl">
         {label}
       </label>
-      <input
-        ref={ref}
-        id={inputId}
-        aria-invalid={Boolean(error)}
-        className={`w-full rounded-lg border px-3 py-2 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:ring-2 ${
-          error
-            ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-            : 'border-neutral-300 focus:border-indigo-500 focus:ring-indigo-100'
-        } ${className}`}
-        {...rest}
-      />
-      {error ? <p className="text-xs text-red-500">{error}</p> : null}
+      <div className={`input${error ? ' err' : ''}`}>
+        <input
+          ref={ref}
+          id={inputId}
+          aria-invalid={Boolean(error)}
+          className={className}
+          {...rest}
+        />
+      </div>
+      {error ? <p className="err-text">{error}</p> : null}
     </div>
   )
 })

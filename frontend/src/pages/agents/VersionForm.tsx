@@ -8,6 +8,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { agentApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { PROVIDER_OPTIONS, canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
@@ -150,15 +151,15 @@ export default function VersionForm() {
   })
 
   if (orgId == null || agentId == null || Number.isNaN(orgId) || Number.isNaN(agentId)) {
-    return <p className="text-sm text-neutral-500">参数无效</p>
+    return <p className="muted">参数无效</p>
   }
 
   if (org == null) {
-    return <p className="text-sm text-neutral-500">加载中…</p>
+    return <p className="muted">加载中…</p>
   }
 
   if (!canManage) {
-    return <p className="text-sm text-neutral-500">没有权限管理智能体</p>
+    return <p className="muted">没有权限管理智能体</p>
   }
 
   const onSubmit = handleSubmit((values) => {
@@ -174,19 +175,24 @@ export default function VersionForm() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div>
-        <h2 className="text-xl font-semibold text-neutral-900">新建版本</h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          {agent ? `${agent.name} · 基于当前版本预填，创建后需在详情页发布` : '加载中…'}
-        </p>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">新建版本</h1>
+          <p className="page-sub">
+            {agent ? `${agent.name} · 基于当前版本预填，创建后需在详情页发布` : '加载中…'}
+          </p>
+        </div>
       </div>
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      <form onSubmit={onSubmit} noValidate className="mt-6 space-y-6">
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-neutral-900">模型配置</h3>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <form onSubmit={onSubmit} noValidate className="mt-6 flex flex-col gap-5">
+        <section className="card card-pad">
+          <h3 className="card-title">
+            <Icon name="cpu" className="ic" />
+            模型配置
+          </h3>
+          <div className="mt-4 grid g2">
             <div>
               <TextField
                 label="LLM Provider"
@@ -208,7 +214,7 @@ export default function VersionForm() {
               {...register('modelName')}
             />
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid g2">
             <TextField
               label="Temperature"
               type="number"
@@ -227,60 +233,62 @@ export default function VersionForm() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-neutral-900">系统提示词</h3>
-          <div className="mt-4 flex flex-col gap-2">
-            <label htmlFor="version-system-prompt" className="text-sm font-medium text-neutral-700">
+        <section className="card card-pad">
+          <h3 className="card-title">
+            <Icon name="file-text" className="ic" />
+            系统提示词
+          </h3>
+          <div className="field mt-4">
+            <label htmlFor="version-system-prompt" className="lbl">
               System Prompt
             </label>
             <textarea
               id="version-system-prompt"
               rows={10}
               placeholder="定义智能体的角色、行为与回答风格…"
-              className={`w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:ring-2 ${
+              className={`w-full resize-y rounded-[10px] border px-3.5 py-2.5 mono leading-relaxed outline-none transition placeholder:text-[#b3b9ce] ${
                 errors.systemPrompt
-                  ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-                  : 'border-neutral-300 focus:border-indigo-500 focus:ring-indigo-100'
+                  ? 'border-[#f5c6c6] focus:border-[#dc2626] focus:ring-2 focus:ring-[#fdecec]'
+                  : 'border-[var(--line-2)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[#e4e6ff]'
               }`}
               {...register('systemPrompt')}
             />
-            {errors.systemPrompt ? (
-              <p className="text-xs text-red-500">{errors.systemPrompt.message}</p>
-            ) : null}
+            {errors.systemPrompt ? <p className="err-text">{errors.systemPrompt.message}</p> : null}
           </div>
         </section>
 
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-neutral-900">知识库（RAG）</h3>
-          <p className="mt-1 text-xs text-neutral-400">
+        <section className="card card-pad">
+          <h3 className="card-title">
+            <Icon name="book" className="ic" />
+            知识库（RAG）
+          </h3>
+          <p className="card-sub mt-1">
             绑定后对话将检索知识库片段作为参考资料并附引用来源；不勾选 = 不启用 RAG。绑定随版本快照保存（knowledge.md D11）。
           </p>
           {kbList && kbList.length > 0 ? (
-            <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <ul className="mt-4 grid g2">
               {kbList.map((kb) => (
                 <li key={kb.id}>
-                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 transition hover:bg-neutral-50">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-[10px] border border-[var(--line)] px-3 py-2.5 text-[13.5px] transition hover:bg-[var(--surface-2)]">
                     <input
                       type="checkbox"
                       checked={selectedKbIds.includes(kb.id)}
                       onChange={() => toggleKb(kb.id)}
-                      className="h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                      className="h-4 w-4 rounded accent-[#5b5bd6]"
                     />
                     <span className="min-w-0 flex-1 truncate">{kb.name}</span>
-                    <span className="shrink-0 text-xs text-neutral-400">
-                      {kb.document_count} 文档
-                    </span>
+                    <span className="shrink-0 text-[12px] muted">{kb.document_count} 文档</span>
                   </label>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-4 rounded-lg border border-dashed border-neutral-300 p-4 text-center text-xs text-neutral-400">
-              该组织暂无知识库，可先在「知识库」中创建并上传文档
-            </p>
+            <div className="empty mt-4" style={{ padding: '26px 16px' }}>
+              <p>该组织暂无知识库，可先在「知识库」中创建并上传文档</p>
+            </div>
           )}
           {selectedKbIds.length > 0 ? (
-            <div className="mt-4 w-40">
+            <div className="mt-4 w-44">
               <TextField
                 label="检索条数（每个知识库）"
                 type="number"
@@ -294,19 +302,15 @@ export default function VersionForm() {
           ) : null}
         </section>
 
-        <div className="flex items-center gap-3">
+        <div className="row-actions">
           <button
             type="button"
             onClick={() => navigate(agentDetailPath(orgId, agentId))}
-            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-700 transition hover:bg-neutral-100"
+            className="btn ghost"
           >
             取消
           </button>
-          <button
-            type="submit"
-            disabled={submitMutation.isPending}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <button type="submit" disabled={submitMutation.isPending} className="btn primary">
             {submitMutation.isPending ? '创建中…' : '创建版本'}
           </button>
         </div>

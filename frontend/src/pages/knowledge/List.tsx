@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { knowledgeApi } from '@/api'
+import Icon from '@/components/Icon'
 import { canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import {
@@ -34,7 +35,7 @@ export default function KnowledgeBaseList() {
   })
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   const handleDelete = (kbId: number, name: string) => {
@@ -45,11 +46,11 @@ export default function KnowledgeBaseList() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="page-head">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">知识库</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <h1 className="page-title">知识库</h1>
+          <p className="page-sub">
             {org ? `${org.name} · 企业文档管理、向量化与 RAG 检索测试` : '加载中…'}
           </p>
         </div>
@@ -57,48 +58,47 @@ export default function KnowledgeBaseList() {
           <button
             type="button"
             onClick={() => navigate(knowledgeBaseNewPath(orgId))}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700"
+            className="btn primary"
           >
+            <Icon name="plus" className="ic" />
             新建知识库
           </button>
         ) : null}
       </div>
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
       {isPending ? (
-        <p className="mt-6 text-sm text-neutral-500">加载中…</p>
+        <p className="mt-6 muted">加载中…</p>
       ) : kbs && kbs.length > 0 ? (
-        <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid g2 mt-6 xl:grid-cols-3">
           {kbs.map((kb) => (
-            <li
-              key={kb.id}
-              className="flex flex-col justify-between rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="truncate text-base font-semibold text-neutral-900">{kb.name}</h3>
-                  {kb.processing_count > 0 ? (
-                    <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                      {kb.processing_count} 处理中
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-0.5 text-xs text-neutral-400">
-                  {kb.embedding_model} · 片段 {kb.chunk_size}/{kb.chunk_overlap}
-                </p>
-                <p className="mt-3 line-clamp-2 min-h-8 text-xs text-neutral-500">
-                  {kb.description || '暂无描述'}
-                </p>
-                <p className="mt-3 text-xs text-neutral-400">
-                  {kb.document_count} 个文档 · 更新于 {new Date(kb.updated_at).toLocaleDateString('zh-CN')}
-                </p>
+            <li key={kb.id} className="card card-pad flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <span className="avatar md av-3">
+                  <Icon name="book" width={16} height={16} />
+                </span>
+                <h3 className="truncate text-[15px] font-bold">{kb.name}</h3>
+                {kb.processing_count > 0 ? (
+                  <span className="badge proc">{kb.processing_count} 处理中</span>
+                ) : null}
               </div>
-              <div className="mt-4 flex items-center gap-2">
+              <p className="text-[12px] muted">
+                <span className="mono">{kb.embedding_model}</span> · 片段{' '}
+                <span className="mono">{kb.chunk_size}/{kb.chunk_overlap}</span>
+              </p>
+              <p className="line-clamp-2 min-h-9 text-[13px] muted">
+                {kb.description || '暂无描述'}
+              </p>
+              <p className="text-[12px] muted">
+                {kb.document_count} 个文档 · 更新于{' '}
+                {new Date(kb.updated_at).toLocaleDateString('zh-CN')}
+              </p>
+              <div className="row-actions mt-1">
                 <button
                   type="button"
                   onClick={() => navigate(knowledgeBaseDetailPath(orgId, kb.id))}
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700"
+                  className="btn primary xs"
                 >
                   查看
                 </button>
@@ -107,7 +107,7 @@ export default function KnowledgeBaseList() {
                     <button
                       type="button"
                       onClick={() => navigate(knowledgeBaseEditPath(orgId, kb.id))}
-                      className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 transition hover:bg-neutral-100"
+                      className="btn ghost xs"
                     >
                       编辑
                     </button>
@@ -115,7 +115,7 @@ export default function KnowledgeBaseList() {
                       type="button"
                       disabled={deleteMutation.isPending && deleteMutation.variables === kb.id}
                       onClick={() => handleDelete(kb.id, kb.name)}
-                      className="ml-auto rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="btn xs danger-ghost ml-auto"
                     >
                       {deleteMutation.isPending && deleteMutation.variables === kb.id
                         ? '删除中…'
@@ -128,12 +128,23 @@ export default function KnowledgeBaseList() {
           ))}
         </ul>
       ) : (
-        <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
-          <p className="text-sm text-neutral-500">
-            {canManage
-              ? '尚未创建知识库，点击右上角「新建知识库」上传企业文档'
-              : '该组织暂无知识库'}
+        <div className="empty mt-6">
+          <Icon name="book" className="ic" />
+          <p>
+            {canManage ? '尚未创建知识库，点击右上角「新建知识库」上传企业文档' : '该组织暂无知识库'}
           </p>
+          {canManage ? (
+            <div className="actions">
+              <button
+                type="button"
+                onClick={() => navigate(knowledgeBaseNewPath(orgId))}
+                className="btn primary sm"
+              >
+                <Icon name="plus" className="ic" />
+                新建知识库
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

@@ -8,6 +8,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { organizationApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { errorMessage } from '@/constants/error-messages'
 import { ROUTE_PATHS } from '@/constants/routes'
@@ -97,7 +98,7 @@ export default function Settings() {
   })
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   const onRename = handleSubmit((values) => {
@@ -129,45 +130,42 @@ export default function Settings() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h2 className="text-xl font-semibold text-neutral-900">组织设置</h2>
-      <p className="mt-1 text-sm text-neutral-500">{org?.name ?? '加载中…'}</p>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">组织设置</h1>
+          <p className="page-sub">{org?.name ?? '加载中…'}</p>
+        </div>
+      </div>
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      <section className="mt-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h3 className="text-base font-semibold text-neutral-900">基本信息</h3>
-        <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <dt className="text-neutral-400">企业拥有者</dt>
-            <dd className="mt-1 text-neutral-900">{org?.owner_username ?? '—'}</dd>
+      <section className="card card-pad">
+        <h3 className="card-title">
+          <Icon name="settings" className="ic" />
+          基本信息
+        </h3>
+        <dl className="kv mt-3">
+          <div className="row">
+            <dt>企业拥有者</dt>
+            <dd>{org?.owner_username ?? '—'}</dd>
           </div>
-          <div>
-            <dt className="text-neutral-400">成员数</dt>
-            <dd className="mt-1 text-neutral-900">{org?.member_count ?? '—'}</dd>
+          <div className="row">
+            <dt>成员数</dt>
+            <dd>{org?.member_count ?? '—'}</dd>
           </div>
-          <div>
-            <dt className="text-neutral-400">创建时间</dt>
-            <dd className="mt-1 text-neutral-900">
-              {org ? new Date(org.created_at).toLocaleString('zh-CN') : '—'}
-            </dd>
+          <div className="row">
+            <dt>创建时间</dt>
+            <dd>{org ? new Date(org.created_at).toLocaleString('zh-CN') : '—'}</dd>
           </div>
         </dl>
 
         {canRename ? (
-          <form onSubmit={onRename} noValidate className="mt-6 border-t border-neutral-100 pt-5">
+          <form onSubmit={onRename} noValidate className="mt-4 border-t border-[var(--line)] pt-4">
             <div className="flex items-end gap-3">
               <div className="flex-1">
-                <TextField
-                  label="组织名称"
-                  error={errors.name?.message}
-                  {...register('name')}
-                />
+                <TextField label="组织名称" error={errors.name?.message} {...register('name')} />
               </div>
-              <button
-                type="submit"
-                disabled={renameMutation.isPending}
-                className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+              <button type="submit" disabled={renameMutation.isPending} className="btn primary">
                 {renameMutation.isPending ? '保存中…' : '保存'}
               </button>
             </div>
@@ -176,19 +174,25 @@ export default function Settings() {
       </section>
 
       {isOwner ? (
-        <section className="mt-6 rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
-          <h3 className="text-base font-semibold text-red-600">危险区</h3>
+        <section
+          className="card card-pad mt-5"
+          style={{ borderColor: '#f2c6c6', background: '#fffafa' }}
+        >
+          <h3 className="card-title" style={{ color: 'var(--red)' }}>
+            <Icon name="alert" className="ic" />
+            危险区
+          </h3>
 
-          <div className="mt-4 border-t border-neutral-100 pt-5">
-            <p className="text-sm font-medium text-neutral-900">转让组织</p>
-            <p className="mt-1 text-xs text-neutral-500">
+          <div className="mt-3 border-t border-[var(--line)] pt-4">
+            <p className="font-medium">转让组织</p>
+            <p className="mt-1 text-[12.5px] muted">
               将企业拥有者角色转让给一名成员，您将变为管理员
             </p>
             <div className="mt-3 flex items-center gap-3">
               <select
                 value={transferTarget ?? ''}
                 onChange={(e) => setTransferTarget(Number(e.target.value))}
-                className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                className="select flex-1"
               >
                 <option value="" disabled>
                   选择新企业拥有者…
@@ -203,31 +207,33 @@ export default function Settings() {
                 type="button"
                 disabled={transferTarget == null || transferMutation.isPending}
                 onClick={handleTransfer}
-                className="shrink-0 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn sm danger-ghost"
               >
                 {transferMutation.isPending ? '转让中…' : '转让'}
               </button>
             </div>
           </div>
 
-          <div className="mt-6 border-t border-neutral-100 pt-5">
-            <p className="text-sm font-medium text-neutral-900">解散组织</p>
-            <p className="mt-1 text-xs text-neutral-500">
+          <div className="mt-5 border-t border-[var(--line)] pt-4">
+            <p className="font-medium">解散组织</p>
+            <p className="mt-1 text-[12.5px] muted">
               请输入组织名称确认，解散后所有成员关系将被删除
             </p>
             <div className="mt-3 flex items-center gap-3">
-              <input
-                type="text"
-                value={confirmName}
-                onChange={(e) => setConfirmName(e.target.value)}
-                placeholder={org?.name}
-                className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100"
-              />
+              <div className="input flex-1" style={{ borderColor: '#f2c6c6' }}>
+                <Icon name="edit" className="ic" />
+                <input
+                  type="text"
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  placeholder={org?.name}
+                />
+              </div>
               <button
                 type="button"
                 disabled={dissolveDisabled}
                 onClick={handleDissolve}
-                className="shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn danger sm"
               >
                 {dissolveMutation.isPending ? '解散中…' : '解散组织'}
               </button>

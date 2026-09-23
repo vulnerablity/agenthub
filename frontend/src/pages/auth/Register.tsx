@@ -1,5 +1,5 @@
 // pages/auth/Register.tsx
-// 注册页：邮箱 + 用户名 + 密码，成功后跳登录页并预填邮箱
+// 注册页：分屏品牌区 + 表单（邮箱/用户名/密码），成功后跳登录页并预填邮箱
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { authApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { errorMessage } from '@/constants/error-messages'
 import { ROUTE_PATHS } from '@/constants/routes'
@@ -45,58 +46,92 @@ export default function Register() {
   })
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm"
-        noValidate
-      >
-        <h1 className="text-xl font-semibold text-neutral-900">创建账号</h1>
-        <p className="mt-1 text-sm text-neutral-500">注册一个新的 AgentHub 账号</p>
+    <div className="login-page">
+      <div className="login-wrap">
+        <aside className="login-brand">
+          <div className="rel">
+            <div className="lb-head">
+              <span className="tb-logo">
+                <Icon name="spark" width={19} height={19} color="#fff" />
+              </span>
+              <span>AgentHub</span>
+            </div>
+            <p className="lb-tag">ENTERPRISE AGENT PLATFORM</p>
 
-        <div className="mt-6 flex flex-col gap-4">
-          <TextField
-            label="邮箱"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            error={errors.email?.message}
-            {...register('email')}
-          />
-          <TextField
-            label="用户名"
-            autoComplete="username"
-            placeholder="请输入用户名"
-            error={errors.username?.message}
-            {...register('username')}
-          />
-          <TextField
-            label="密码"
-            type="password"
-            autoComplete="new-password"
-            placeholder="至少 6 位"
-            error={errors.password?.message}
-            {...register('password')}
-          />
-        </div>
+            <h2>
+              从 <em>第一个智能体</em>
+              <br />
+              开始企业智能化
+            </h2>
+            <p className="lb-sub">
+              创建账号后即可加入或创建组织，
+              <br />
+              配置知识库、工具与可对话的智能体。
+            </p>
 
-        {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+            <div className="lb-feats">
+              <div className="lb-feat">
+                <Icon name="users" className="ic" />
+                组织协作与角色权限
+              </div>
+              <div className="lb-feat">
+                <Icon name="db" className="ic" />
+                企业知识库统一沉淀
+              </div>
+              <div className="lb-feat">
+                <Icon name="activity" className="ic" />
+                执行过程全量可追溯
+              </div>
+            </div>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="mt-6 w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isSubmitting ? '注册中…' : '注册'}
-        </button>
+            <p className="lb-foot">AgentHub · 企业智能体平台</p>
+          </div>
+        </aside>
 
-        <p className="mt-4 text-center text-sm text-neutral-500">
-          已有账号？
-          <Link to={ROUTE_PATHS.LOGIN} className="font-medium text-indigo-600 hover:underline">
-            去登录
-          </Link>
-        </p>
-      </form>
+        <section className="login-form">
+          <h1 className="lf-title">创建账号</h1>
+          <p className="lf-sub">注册一个新的 AgentHub 账号</p>
+
+          <form onSubmit={onSubmit} noValidate>
+            <div className="fields">
+              <TextField
+                label="邮箱"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                error={errors.email?.message}
+                {...register('email')}
+              />
+              <TextField
+                label="用户名"
+                autoComplete="username"
+                placeholder="请输入用户名"
+                error={errors.username?.message}
+                {...register('username')}
+              />
+              <TextField
+                label="密码"
+                type="password"
+                autoComplete="new-password"
+                placeholder="至少 6 位"
+                error={errors.password?.message}
+                {...register('password')}
+              />
+            </div>
+
+            {apiError ? <p className="mt-3 text-sm text-red-500">{apiError}</p> : null}
+
+            <button type="submit" disabled={isSubmitting} className="btn primary mt-5">
+              {isSubmitting ? '注册中…' : '注 册'}
+            </button>
+
+            <p className="lf-foot">
+              已有账号？
+              <Link to={ROUTE_PATHS.LOGIN}>去登录</Link>
+            </p>
+          </form>
+        </section>
+      </div>
     </div>
   )
 }
