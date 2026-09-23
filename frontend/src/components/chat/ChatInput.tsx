@@ -3,6 +3,8 @@
 import { useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 
+import Icon from '@/components/Icon'
+
 interface ChatInputProps {
   disabled?: boolean
   streaming?: boolean
@@ -56,22 +58,26 @@ export default function ChatInput({
         onChange={(e) => setValue(e.target.value)}
         onInput={autoGrow}
         onKeyDown={handleKeyDown}
-        className="max-h-40 flex-1 resize-none rounded-xl border border-neutral-300 px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+        className="chat-ta"
       />
       {streaming ? (
         <button
           type="button"
           onClick={onStop}
-          className="shrink-0 rounded-xl border border-neutral-300 px-5 py-3 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+          className="btn ghost shrink-0"
+          style={{ padding: '10px 18px' }}
         >
+          <Icon name="stop" className="ic" />
           停止
         </button>
       ) : (
         <button
           type="submit"
           disabled={disabled || !value.trim()}
-          className="shrink-0 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="btn primary shrink-0"
+          style={{ padding: '10px 18px' }}
         >
+          <Icon name="send" className="ic" />
           发送
         </button>
       )}

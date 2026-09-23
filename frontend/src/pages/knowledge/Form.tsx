@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { knowledgeApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { errorMessage } from '@/constants/error-messages'
 import { knowledgeBaseDetailPath, knowledgeBasesPath } from '@/constants/routes'
@@ -38,11 +39,11 @@ export default function KnowledgeBaseForm() {
   }
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   if (isEdit && !existing) {
-    return <p className="text-sm text-neutral-500">知识库不存在</p>
+    return <p className="muted">知识库不存在</p>
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,18 +77,26 @@ export default function KnowledgeBaseForm() {
       <button
         type="button"
         onClick={() =>
-          isEdit ? navigate(knowledgeBaseDetailPath(orgId, kbId)) : navigate(knowledgeBasesPath(orgId))
+          isEdit
+            ? navigate(knowledgeBaseDetailPath(orgId, kbId))
+            : navigate(knowledgeBasesPath(orgId))
         }
-        className="text-sm text-neutral-500 transition hover:text-neutral-700"
+        className="btn ghost xs"
       >
-        ← 返回
+        <Icon name="back" className="ic" />
+        返回
       </button>
 
-      <h2 className="mt-4 text-xl font-semibold text-neutral-900">
-        {isEdit ? '编辑知识库' : '新建知识库'}
-      </h2>
+      <div className="page-head mt-4">
+        <div>
+          <h1 className="page-title">{isEdit ? '编辑知识库' : '新建知识库'}</h1>
+          <p className="page-sub">
+            {isEdit ? '仅可修改名称与描述' : '创建后可上传文档并用于智能体 RAG 检索'}
+          </p>
+        </div>
+      </div>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <form onSubmit={handleSubmit} className="card card-pad mt-5 flex flex-col gap-5">
         <TextField
           label="名称"
           placeholder="例如：公司制度库"
@@ -96,8 +105,8 @@ export default function KnowledgeBaseForm() {
           required
           maxLength={100}
         />
-        <div className="flex flex-col gap-2">
-          <label htmlFor="kb-description" className="text-sm font-medium text-neutral-700">
+        <div className="field">
+          <label htmlFor="kb-description" className="lbl">
             描述
           </label>
           <textarea
@@ -107,16 +116,17 @@ export default function KnowledgeBaseForm() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={5000}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="w-full resize-y rounded-[10px] border border-[var(--line-2)] px-3.5 py-2.5 outline-none transition placeholder:text-[#b3b9ce] focus:border-[var(--accent)] focus:ring-2 focus:ring-[#e4e6ff]"
           />
         </div>
 
         {!isEdit ? (
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-neutral-400">
-              切分参数仅创建时可配置，创建后不可修改（仅对新增文档生效）；Embedding 模型全局统一（{existing?.embedding_model ?? '按服务配置'}）。
+            <p className="rounded-[10px] bg-[var(--accent-soft)] px-3.5 py-2.5 text-[12.5px] text-[var(--accent-ink)]">
+              切分参数仅创建时可配置，创建后不可修改（仅对新增文档生效）；Embedding 模型全局统一（
+              {existing?.embedding_model ?? '按服务配置'}）。
             </p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid g2">
               <TextField
                 label="片段大小（字符）"
                 type="number"
@@ -139,13 +149,24 @@ export default function KnowledgeBaseForm() {
           </div>
         ) : null}
 
-        {apiError ? <p className="text-sm text-red-500">{apiError}</p> : null}
+        {apiError ? <p className="text-[13px] text-red-500">{apiError}</p> : null}
 
-        <div className="flex justify-end">
+        <div className="row-actions">
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() =>
+              isEdit
+                ? navigate(knowledgeBaseDetailPath(orgId, kbId))
+                : navigate(knowledgeBasesPath(orgId))
+            }
+          >
+            取消
+          </button>
           <button
             type="submit"
             disabled={submitting || !name.trim()}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn primary"
           >
             {submitting ? '保存中…' : isEdit ? '保存' : '创建'}
           </button>

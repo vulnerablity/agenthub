@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentHub 前端 UI 优化设计稿</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%235b5bd6'/%3E%3Cstop offset='1' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M16 6l2.3 6.7L25 15l-6.7 2.3L16 24l-2.3-6.7L7 15l6.7-2.3z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap">
+<style>
+/* ================= 设计令牌 ================= */
+:root{
+  --bg:#f3f4fa; --surface:#ffffff; --surface-2:#f8f9fd;
+  --ink-1:#141731; --ink-2:#5a6078; --ink-3:#9aa1b8;
+  --line:#e7e9f2; --line-2:#dcdff0;
+  --accent:#5b5bd6; --accent-2:#8b5cf6; --accent-ink:#4a44c9; --accent-soft:#edf0ff;
+  --green:#0e9f6e; --green-bg:#e6f8f0; --amber:#d97706; --amber-bg:#fdf3e2;
+  --red:#dc2626; --red-bg:#fdecec; --blue:#2563eb; --blue-bg:#e8f0fe;
+  --sidebar:#12152f; --sidebar-2:#1a1e40;
+  --grad:linear-gradient(135deg,#5b5bd6,#8b5cf6);
+  --r:14px; --r-sm:10px;
+  --sh-1:0 1px 2px rgba(20,23,49,.05),0 4px 16px rgba(20,23,49,.05);
+  --sh-2:0 2px 6px rgba(20,23,49,.06),0 18px 44px rgba(20,23,49,.11);
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  font-size:14px;color:var(--ink-1);background:var(--bg);line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink-1)}
+a{color:var(--accent-ink);text-decoration:none}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#ccd0e4;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ================= 顶栏 ================= */
+.topbar{
+  position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:16px;
+  height:60px;padding:0 20px;background:rgba(255,255,255,.86);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.tb-brand{display:flex;align-items:center;gap:10px;min-width:230px}
+.tb-logo{width:30px;height:30px;border-radius:9px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(91,91,214,.35)}
+.tb-brand b{font-size:15px;font-weight:700;letter-spacing:.2px}
+.tb-brand span{display:block;font-size:11px;color:var(--ink-3);font-weight:500}
+.tb-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{
+  border:1px solid var(--line-2);background:#fff;color:var(--ink-2);
+  padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:500;
+  transition:all .18s;
+}
+.chip:hover{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.chip.active{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 4px 12px rgba(91,91,214,.32)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.tb-note{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:#fff;
+  color:var(--ink-2);padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:500;transition:all .18s;
+}
+.tb-note:hover{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.tb-badge{font-size:11px;color:var(--accent-ink);background:var(--accent-soft);border:1px solid #dfe3ff;padding:3px 9px;border-radius:999px;font-weight:600;white-space:nowrap}
+
+/* ================= 舞台 ================= */
+.stage{max-width:1560px;margin:0 auto;padding:20px 20px 28px}
+.app{
+  display:flex;height:calc(100vh - 112px);min-height:620px;overflow:hidden;
+  background:#fff;border:1px solid var(--line-2);border-radius:18px;box-shadow:var(--sh-2);
+}
+
+/* ================= 侧边栏 ================= */
+.sidebar{
+  width:234px;flex-shrink:0;display:flex;flex-direction:column;color:#c8cce4;
+  background:
+    radial-gradient(120% 60% at 0% 0%,rgba(124,92,252,.20) 0%,transparent 55%),
+    radial-gradient(120% 50% at 100% 100%,rgba(59,91,219,.16) 0%,transparent 55%),
+    var(--sidebar);
+  border-right:1px solid rgba(255,255,255,.06);
+}
+.sb-logo{display:flex;align-items:center;gap:10px;padding:18px 18px 14px}
+.sb-logo .tb-logo{width:32px;height:32px;border-radius:10px}
+.sb-logo b{font-size:16px;color:#fff;font-weight:700}
+.sb-logo small{display:block;font-size:10.5px;color:#8f94bd;font-weight:500;letter-spacing:.4px}
+.sb-org{margin:4px 12px 10px;padding:11px 12px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08)}
+.sb-org .lbl{font-size:10.5px;color:#8f94bd;letter-spacing:.6px;font-weight:600}
+.sb-org .row{display:flex;align-items:center;gap:8px;margin-top:5px;color:#eef0ff;font-size:13px;font-weight:600}
+.sb-org .row .ic{width:15px;height:15px;color:#a5a8ff}
+.sb-org .role{margin-left:auto;font-size:10.5px;font-weight:600;color:#b9a8ff;background:rgba(124,92,252,.18);padding:2px 8px;border-radius:999px}
+.sb-nav{flex:1;overflow-y:auto;padding:6px 10px 10px}
+.nav-group{font-size:10.5px;color:#70759f;letter-spacing:1px;font-weight:600;padding:14px 10px 6px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:8.5px 11px;border-radius:10px;border:0;background:transparent;color:#b9bdd9;
+  font-size:13px;font-weight:500;transition:all .16s;
+}
+.nav-item .ic{width:16px;height:16px;flex-shrink:0;color:#8f94bd;transition:color .16s}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.active{background:linear-gradient(120deg,rgba(91,91,214,.32),rgba(124,92,252,.22));color:#fff;box-shadow:inset 0 0 0 1px rgba(139,92,246,.35)}
+.nav-item.active .ic{color:#c3b3ff}
+.nav-item .cnt{margin-left:auto;font-size:10.5px;font-weight:600;background:rgba(255,255,255,.12);color:#d5d8ff;padding:1px 7px;border-radius:999px}
+.nav-item.disabled{opacity:.38;cursor:not-allowed}
+.sb-foot{border-top:1px solid rgba(255,255,255,.07);padding:12px}
+.sb-user{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.06)}
+.sb-user .avatar{width:30px;height:30px;font-size:12px}
+.sb-user .un{font-size:12.5px;font-weight:600;color:#fff;line-height:1.2}
+.sb-user .ue{font-size:10.5px;color:#8f94bd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.logout{margin-top:8px;display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:7px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#aeb2d4;font-size:12px;transition:all .16s}
+.logout:hover{background:rgba(220,38,38,.14);border-color:rgba(220,38,38,.35);color:#ff9d9d}
+
+/* ================= 内容区 ================= */
+.content{flex:1;min-width:0;overflow-y:auto;background:var(--bg)}
+.screen{display:none;padding:26px 30px 40px;max-width:1240px;margin:0 auto}
+.screen.active{display:block;animation:rise .28s ease}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.page-title{font-size:21px;font-weight:700;letter-spacing:.2px}
+.page-sub{font-size:13px;color:var(--ink-3);margin-top:3px}
+.page-head .actions{display:flex;gap:10px;align-items:center}
+
+/* ================= 组件 ================= */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:10px;padding:8.5px 16px;font-size:13.5px;font-weight:600;border:1px solid transparent;
+  transition:all .18s;white-space:nowrap;
+}
+.btn .ic{width:15px;height:15px}
+.btn.primary{background:var(--grad);color:#fff;box-shadow:0 5px 14px rgba(91,91,214,.30)}
+.btn.primary:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(91,91,214,.38)}
+.btn.ghost{background:#fff;border-color:var(--line-2);color:var(--ink-2)}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+.btn.danger{background:var(--red);color:#fff;box-shadow:0 5px 14px rgba(220,38,38,.24)}
+.btn.danger:hover{transform:translateY(-1px)}
+.btn.danger-ghost{background:#fff;border-color:#f2c6c6;color:var(--red)}
+.btn.danger-ghost:hover{background:var(--red-bg)}
+.btn.sm{padding:6px 12px;font-size:12.5px;border-radius:9px}
+.btn.xs{padding:4px 10px;font-size:12px;border-radius:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+
+.badge{display:inline-flex;align-items:center;gap:5px;padding:2.5px 10px;border-radius:999px;font-size:11.5px;font-weight:600;line-height:1.5}
+.badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.badge.ok{background:var(--green-bg);color:var(--green)}
+.badge.err{background:var(--red-bg);color:var(--red)}
+.badge.warn{background:var(--amber-bg);color:var(--amber)}
+.badge.off{background:#eef0f6;color:#7b819a}
+.badge.info{background:var(--blue-bg);color:var(--blue)}
+.badge.proc{background:#f3e8ff;color:#9333ea}
+.badge.accent{background:var(--accent-soft);color:var(--accent-ink)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-1)}
+.card-pad{padding:20px}
+.card-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+.card-title .ic{width:16px;height:16px;color:var(--accent)}
+.card-sub{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+
+.grid{display:grid;gap:16px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+
+.stat{position:relative;overflow:hidden;padding:18px 18px 14px}
+.stat .lbl{font-size:12px;color:var(--ink-3);font-weight:500;display:flex;align-items:center;gap:7px}
+.stat .lbl .ic{width:14px;height:14px;color:var(--accent)}
+.stat .val{font-size:26px;font-weight:700;letter-spacing:.3px;margin-top:6px;font-variant-numeric:tabular-nums}
+.stat .delta{font-size:11.5px;color:var(--ink-3);margin-top:2px}
+.stat .delta b{font-weight:600}
+.stat .delta b.up{color:var(--green)} .stat .delta b.down{color:var(--red)}
+.stat .spark{position:absolute;right:12px;bottom:10px;width:86px;height:38px;opacity:.9}
+.stat::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--grad);border-radius:0 3px 3px 0;opacity:0;transition:opacity .18s}
+.stat:hover::after{opacity:1}
+
+.input{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line-2);border-radius:10px;padding:0 11px;height:38px;transition:all .18s}
+.input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,91,214,.13)}
+.input .ic{width:15px;height:15px;color:var(--ink-3);flex-shrink:0}
+.input input{border:0;outline:0;background:transparent;flex:1;min-width:0;font-size:13.5px}
+.input input::placeholder{color:#b3b9ce}
+.select{height:38px;border:1px solid var(--line-2);border-radius:10px;padding:0 30px 0 11px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa1b8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;font-size:13px;color:var(--ink-2);outline:none;transition:border-color .18s;appearance:none}
+.select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,91,214,.13)}
+.field .lbl{font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:6px;display:block}
+
+.avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-weight:700;flex-shrink:0;user-select:none}
+.av-1{background:linear-gradient(135deg,#5b5bd6,#8b5cf6)}
+.av-2{background:linear-gradient(135deg,#0ea5e9,#6366f1)}
+.av-3{background:linear-gradient(135deg,#10b981,#0ea5e9)}
+.av-4{background:linear-gradient(135deg,#f59e0b,#ef4444)}
+.av-5{background:linear-gradient(135deg,#ec4899,#8b5cf6)}
+.av-6{background:linear-gradient(135deg,#64748b,#334155)}
+.avatar.sm{width:26px;height:26px;font-size:11px}
+.avatar.md{width:36px;height:36px;font-size:14px}
+.avatar.lg{width:46px;height:46px;font-size:17px}
+
+.mono{font-family:var(--mono);font-size:12px}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2);padding:1px 8px;border-radius:6px;font-variant-numeric:tabular-nums}
+.kv dt{font-size:12px;color:var(--ink-3);font-weight:500}
+.kv dd{font-size:13.5px;color:var(--ink-1);margin-top:2px;word-break:break-word}
+.kv .row{padding:9px 0;border-bottom:1px dashed var(--line)}
+.kv .row:last-child{border-bottom:0}
+
+.tabs{display:inline-flex;gap:4px;background:#eef0f8;border-radius:11px;padding:4px}
+.tabs button{border:0;background:transparent;padding:6px 15px;border-radius:8px;font-size:13px;font-weight:600;color:var(--ink-2);transition:all .16s}
+.tabs button.active{background:#fff;color:var(--accent-ink);box-shadow:var(--sh-1)}
+
+.empty{border:1.5px dashed var(--line-2);border-radius:var(--r);background:var(--surface);padding:44px 20px;text-align:center}
+.empty .ic{width:34px;height:34px;color:#c3c8de;margin:0 auto 10px;display:block}
+.empty p{font-size:13px;color:var(--ink-3)}
+
+.divider{height:1px;background:var(--line);border:0;margin:14px 0}
+
+/* 表格 */
+.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:#fff;box-shadow:var(--sh-1)}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}
+.tbl thead th{background:var(--surface-2);color:var(--ink-3);font-size:11.5px;font-weight:600;text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);letter-spacing:.3px;white-space:nowrap}
+.tbl tbody td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:0}
+.tbl tbody tr{transition:background .14s}
+.tbl tbody tr.clickable{cursor:pointer}
+.tbl tbody tr.clickable:hover{background:var(--accent-soft)}
+.tbl .strong{color:var(--ink-1);font-weight:600}
+.tbl .muted{color:var(--ink-3)}
+.num{font-variant-numeric:tabular-nums}
+
+/* 分页 */
+.pager{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-top:14px;font-size:12.5px;color:var(--ink-3)}
+
+/* ================= 登录页 ================= */
+.login-wrap{display:grid;grid-template-columns:1.05fr 1fr;min-height:calc(100vh - 196px);border-radius:0}
+.login-brand{position:relative;overflow:hidden;background:var(--sidebar);color:#fff;padding:44px 44px;display:flex;flex-direction:column}
+.login-brand::before{content:"";position:absolute;inset:0;background:radial-gradient(80% 60% at 20% 0%,rgba(124,92,252,.30),transparent 55%),radial-gradient(90% 60% at 90% 100%,rgba(59,91,219,.25),transparent 55%)}
+.login-brand .rel{position:relative;z-index:1}
+.login-brand .lb-head{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:700}
+.login-brand .lb-tag{font-size:12px;color:#a9aed6;margin-top:8px}
+.login-brand h2{font-size:27px;font-weight:700;line-height:1.35;margin-top:44px;letter-spacing:.3px}
+.login-brand h2 em{font-style:normal;background:linear-gradient(90deg,#a5a4ff,#c4b5fd);-webkit-background-clip:text;background-clip:text;color:transparent}
+.login-brand .lb-sub{font-size:13.5px;color:#b9bdd9;margin-top:10px;line-height:1.8}
+.lb-feats{margin-top:30px;display:flex;flex-direction:column;gap:11px}
+.lb-feat{display:flex;align-items:center;gap:11px;font-size:13px;color:#d5d8f2}
+.lb-feat .ic{width:16px;height:16px;color:#a5a8ff}
+.lb-foot{margin-top:auto;font-size:11.5px;color:#70759f}
+.login-form{padding:44px 48px;display:flex;flex-direction:column;justify-content:center;background:#fff}
+.login-form .lf-title{font-size:22px;font-weight:700}
+.login-form .lf-sub{font-size:13px;color:var(--ink-3);margin-top:4px}
+.login-form .fields{margin-top:26px;display:flex;flex-direction:column;gap:16px}
+.login-form .btn{width:100%;padding:11px}
+.login-form .lf-links{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:12.5px;color:var(--ink-3)}
+.login-form .lf-foot{margin-top:26px;text-align:center;font-size:12.5px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:18px}
+
+/* ================= 聊天页 ================= */
+.chat-grid{display:grid;grid-template-columns:272px 1fr;min-height:calc(100vh - 170px);height:calc(100vh - 170px);gap:0;overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-1)}
+.session-pane{border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--surface-2);min-width:0}
+.session-pane .sp-head{padding:14px 14px 10px}
+.session-pane .sp-list{flex:1;overflow-y:auto;padding:0 8px 12px}
+.session-item{display:flex;align-items:flex-start;gap:9px;padding:10px 10px;border-radius:11px;cursor:pointer;transition:background .14s;border:1px solid transparent}
+.session-item:hover{background:#fff}
+.session-item.active{background:#fff;border-color:var(--line);box-shadow:var(--sh-1)}
+.session-item .si-name{font-size:13px;font-weight:600;color:var(--ink-1);display:flex;align-items:center;gap:6px}
+.session-item .si-last{font-size:11.5px;color:var(--ink-3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.session-item .si-time{margin-left:auto;font-size:10.5px;color:var(--ink-3);flex-shrink:0}
+.session-item .si-del{opacity:0;transition:opacity .14s}
+.session-item:hover .si-del{opacity:1}
+.chat-main{display:flex;flex-direction:column;min-width:0}
+.chat-head{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--line);background:#fff}
+.chat-head .ch-name{font-size:14px;font-weight:700}
+.chat-head .ch-status{font-size:11.5px;color:var(--green);display:flex;align-items:center;gap:5px}
+.chat-head .ch-status::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(14,159,110,.15)}
+.chat-body{flex:1;overflow-y:auto;padding:20px 22px;background:var(--bg);display:flex;flex-direction:column;gap:16px}
+.msg{display:flex;gap:11px;max-width:78%}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.msg-bubble{padding:11px 15px;border-radius:14px;font-size:13.5px;line-height:1.7}
+.msg.user .msg-bubble{background:var(--grad);color:#fff;border-bottom-right-radius:4px;box-shadow:0 4px 14px rgba(91,91,214,.28)}
+.msg.ai .msg-bubble{background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px;box-shadow:var(--sh-1)}
+.msg .msg-time{font-size:10.5px;color:var(--ink-3);align-self:flex-end;margin:0 4px}
+.src-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.src-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--blue);background:var(--blue-bg);border:1px solid #d3e2fd;padding:2.5px 9px;border-radius:999px;font-weight:500}
+.src-chip .ic{width:11px;height:11px}
+.tool-card{margin-top:9px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);padding:9px 12px;font-size:12px}
+.tool-card .tc-head{display:flex;align-items:center;gap:7px;font-weight:600;color:var(--ink-1);font-size:12px}
+.tool-card .tc-head .ic{width:13px;height:13px;color:var(--accent)}
+.tool-card .tc-io{font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-top:5px;display:flex;flex-direction:column;gap:2px;word-break:break-all}
+.tool-card .tc-ok{color:var(--green);font-weight:600}
+.typing{display:inline-flex;gap:4px;padding:4px 2px}
+.typing i{width:6px;height:6px;border-radius:50%;background:#b9bdd9;animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.18s}.typing i:nth-child(3){animation-delay:.36s}
+@keyframes blink{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.chat-input{border-top:1px solid var(--line);padding:14px 18px;background:#fff}
+.chat-input .ci-box{display:flex;align-items:flex-end;gap:10px;border:1px solid var(--line-2);border-radius:13px;padding:9px 10px 9px 14px;background:#fff;transition:all .18s}
+.chat-input .ci-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,91,214,.12)}
+.chat-input textarea{border:0;outline:0;resize:none;flex:1;min-height:22px;max-height:110px;font-size:13.5px;background:transparent;line-height:1.6;padding-top:2px}
+.chat-input .ci-hint{font-size:11px;color:var(--ink-3);margin-top:7px;display:flex;gap:12px;align-items:center}
+.ci-send{width:34px;height:34px;border-radius:10px;background:var(--grad);border:0;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 4px 10px rgba(91,91,214,.32);transition:all .16s}
+.ci-send:hover{transform:translateY(-1px)}
+.ci-send .ic{width:16px;height:16px}
+
+/* ================= 执行链路 ================= */
+.chain{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:6px 2px}
+.chain-step{flex:1;min-width:132px;position:relative;text-align:center;padding:0 14px}
+.chain-step .cs-ic{width:40px;height:40px;margin:0 auto;border-radius:12px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;border:1px solid var(--line);background:#fff;box-shadow:var(--sh-1)}
+.chain-step .cs-ic .ic{width:18px;height:18px}
+.chain-step.ok .cs-ic{color:var(--green);background:var(--green-bg);border-color:#bfe8d8}
+.chain-step.err .cs-ic{color:var(--red);background:var(--red-bg);border-color:#f5c6c6}
+.chain-step.run .cs-ic{color:var(--accent-ink);background:var(--accent-soft);border-color:#d8dcff}
+.chain-step .cs-name{font-size:12px;font-weight:700;margin-top:8px;color:var(--ink-1)}
+.chain-step .cs-time{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-top:2px}
+.chain-step .cs-extra{font-size:10.5px;color:var(--ink-3);margin-top:1px}
+.chain-step::before{content:"";position:absolute;top:20px;left:calc(50% + 30px);right:calc(-50% + 30px);height:2px;background:linear-gradient(90deg,#d8dbf2,#d8dbf2);z-index:0}
+.chain-step:last-child::before{display:none}
+.chain-step.ok::before{background:linear-gradient(90deg,#8fe0c4,#8fe0c4)}
+
+/* ================= 版本时间轴 ================= */
+.vlist{border-left:2px solid var(--line);margin-left:8px;padding-left:0}
+.vitem{position:relative;padding:0 0 16px 22px}
+.vitem:last-child{padding-bottom:2px}
+.vitem::before{content:"";position:absolute;left:-7px;top:5px;width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid var(--line-2)}
+.vitem.current::before{border-color:var(--accent);box-shadow:0 0 0 4px rgba(91,91,214,.15)}
+
+/* ================= 设计说明抽屉 ================= */
+.notes{position:fixed;top:0;right:0;bottom:0;width:400px;max-width:92vw;z-index:60;background:#fff;box-shadow:-14px 0 40px rgba(20,23,49,.14);transform:translateX(105%);transition:transform .3s ease;overflow-y:auto;padding:24px}
+.notes.open{transform:none}
+.notes .n-title{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px}
+.notes h4{font-size:12px;color:var(--ink-3);font-weight:600;letter-spacing:.8px;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.notes h4::after{content:"";flex:1;height:1px;background:var(--line)}
+.swatches{display:flex;flex-direction:column;gap:8px}
+.swatch{display:flex;align-items:center;gap:10px}
+.swatch .sw{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);flex-shrink:0}
+.swatch .swt{font-size:12px;font-weight:600}
+.swatch .swc{font-size:11px;color:var(--ink-3);font-family:var(--mono)}
+.swatch .swd{font-size:11px;color:var(--ink-3);margin-left:auto;text-align:right}
+.type-row{display:flex;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.type-row .tr-name{font-size:12px;color:var(--ink-2);width:90px;flex-shrink:0}
+.type-row .tr-sample{font-weight:700;color:var(--ink-1)}
+.notes .n-close{position:absolute;top:18px;right:18px;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:#fff;display:flex;align-items:center;justify-content:center;color:var(--ink-2)}
+.notes .n-close:hover{background:var(--red-bg);color:var(--red);border-color:#f2c6c6}
+.notes ul.n-list{display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--ink-2);list-style:none}
+.notes ul.n-list li{display:flex;gap:9px;line-height:1.65}
+.notes ul.n-list .ic{width:14px;height:14px;color:var(--accent);flex-shrink:0;margin-top:2px}
+.note-warn{background:var(--amber-bg);border:1px solid #f3ddb4;color:#92610a;font-size:12px;border-radius:10px;padding:10px 12px;margin-top:18px;line-height:1.7}
+
+/* toast */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:#141731;color:#fff;font-size:13px;padding:10px 18px;border-radius:11px;box-shadow:var(--sh-2);opacity:0;pointer-events:none;transition:all .25s;z-index:80;max-width:80vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ================= 响应式 ================= */
+@media (max-width:1180px){
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:1024px){
+  .app{height:auto;min-height:0;flex-direction:column}
+  .sidebar{width:100%;flex-direction:row;align-items:center;overflow-x:auto;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}
+  .sb-logo,.sb-org,.sb-foot{display:none}
+  .sb-nav{display:flex;gap:4px;padding:8px 10px;flex:none}
+  .nav-group{display:none}
+  .nav-item{white-space:nowrap;padding:7px 12px}
+  .login-wrap{grid-template-columns:1fr}
+  .login-brand{display:none}
+  .chat-grid{grid-template-columns:1fr;height:auto;min-height:0}
+  .session-pane{max-height:220px;border-right:0;border-bottom:1px solid var(--line)}
+}
+@media (max-width:720px){
+  .g4,.g3,.g2{grid-template-columns:1fr}
+  .stage{padding:12px}
+  .app{border-radius:14px}
+  .screen{padding:18px 16px 32px}
+  .tb-brand{min-width:0}
+  .tb-brand span,.tb-badge{display:none}
+  .tb-right .tb-note{display:none}
+  .topbar{flex-wrap:wrap;height:auto;padding:10px 14px;gap:8px}
+  .msg{max-width:92%}
+  .chain-step{min-width:110px}
+}
+</style>
+</head>
+<body>
+
+<!-- SVG 图标库 -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="i-filetxt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.9 5.7L19.5 9.5l-5.6 1.8L12 17l-1.9-5.7L4.5 9.5l5.6-1.8z"/><path d="M19 15l.9 2.6L22.5 18.5l-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+</svg>
+
+<!-- ================= 顶栏 ================= -->
+<header class="topbar">
+  <div class="tb-brand">
+    <div class="tb-logo">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="white"><path d="M12 2l1.9 5.7L19.5 9.5l-5.6 1.8L12 17l-1.9-5.7L4.5 9.5l5.6-1.8z"/></svg>
+    </div>
+    <div>
+      <b>AgentHub</b>
+      <span>前端 UI 优化设计稿 · V2</span>
+    </div>
+  </div>
+  <nav class="tb-chips" id="chips">
+    <button class="chip" data-go="design">设计规范</button>
+    <button class="chip" data-go="login">登录</button>
+    <button class="chip" data-go="home">概览</button>
+    <button class="chip" data-go="agents">智能体管理</button>
+    <button class="chip" data-go="agent-detail">智能体详情</button>
+    <button class="chip" data-go="knowledge">知识库</button>
+    <button class="chip" data-go="tools">工具</button>
+    <button class="chip" data-go="chat">AI 对话</button>
+    <button class="chip" data-go="executions">执行监控</button>
+    <button class="chip" data-go="exec-detail">执行详情</button>
+    <button class="chip" data-go="org">组织管理</button>
+  </nav>
+  <div class="tb-right">
+    <span class="tb-badge">仅设计稿 · 未改动代码</span>
+    <button class="tb-note" id="btn-notes">
+      <svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 8h.01M10 12h4v5h-4"/></svg>
+      设计说明
+    </button>
+  </div>
+</header>
+
+<!-- ================= 设计说明抽屉 ================= -->
+<aside class="notes" id="notes" aria-hidden="true">
+  <button class="n-close" id="btn-notes-close" aria-label="关闭设计说明">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="n-title">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 8h.01M10 12h4v5h-4"/></svg>
+    设计说明
+  </div>
+  <p style="font-size:12.5px;color:var(--ink-2);margin-top:10px;line-height:1.8">
+    本页基于 <b>frontend/src</b> 现有代码的信息架构与数据模型，重新打磨视觉层（配色、排印、间距、组件与信息层级），<b>未改动任何代码</b>。所有页面、字段、状态均来自现有路由与类型定义。
+  </p>
+
+  <h4>色彩系统</h4>
+  <div class="swatches">
+    <div class="swatch"><span class="sw" style="background:#12152f"></span><span><span class="swt">Ink 侧栏</span><br><span class="swc">#12152F</span></span><span class="swd">导航 / 品牌区</span></div>
+    <div class="swatch"><span class="sw" style="background:linear-gradient(135deg,#5b5bd6,#8b5cf6)"></span><span><span class="swt">Accent 主色</span><br><span class="swc">#5B5BD6 → #8B5CF6</span></span><span class="swd">主按钮 / 激活态</span></div>
+    <div class="swatch"><span class="sw" style="background:#edf0ff"></span><span><span class="swt">Accent Soft</span><br><span class="swc">#EDF0FF</span></span><span class="swd">hover / 标签底</span></div>
+    <div class="swatch"><span class="sw" style="background:#0e9f6e"></span><span><span class="swt">Success</span><br><span class="swc">#0E9F6E</span></span><span class="swd">启用 / 成功</span></div>
+    <div class="swatch"><span class="sw" style="background:#d97706"></span><span><span class="swt">Warning</span><br><span class="swc">#D97706</span></span><span class="swd">停用 / 回滚</span></div>
+    <div class="swatch"><span class="sw" style="background:#dc2626"></span><span><span class="swt">Danger</span><br><span class="swc">#DC2626</span></span><span class="swd">删除 / 失败</span></div>
+  </div>
+
+  <h4>字体与排印</h4>
+  <div class="type-row"><span class="tr-name">Display</span><span class="tr-sample" style="font-size:21px;font-weight:800">页面标题 21/700</span></div>
+  <div class="type-row"><span class="tr-name">Card</span><span class="tr-sample" style="font-size:15px;font-weight:700">卡片标题 15/700</span></div>
+  <div class="type-row"><span class="tr-name">Body</span><span class="tr-sample" style="font-size:13.5px;font-weight:400">正文 13.5/400 · 行高 1.7</span></div>
+  <div class="type-row"><span class="tr-name">Label</span><span class="tr-sample" style="font-size:12px;font-weight:500;color:var(--ink-2)">辅助 12/500</span></div>
+  <div class="type-row"><span class="tr-name">Mono</span><span class="tr-sample" style="font-family:var(--mono);font-size:12px">模型 / 版本 / Token 用等宽</span></div>
+  <p style="font-size:12px;color:var(--ink-3);margin-top:10px">字体：Noto Sans SC（自托管镜像），本地打开时自动回退系统字体。</p>
+
+  <h4>优化要点</h4>
+  <ul class="n-list">
+    <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>深色侧栏 + 渐变品牌标识：与浅色内容区形成稳定导航层，激活态用紫罗兰渐变高亮。</li>
+    <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>概览页升级为工作台：统计卡 + 趋势迷你图 + 最近执行，信息密度提升、一眼可读。</li>
+    <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>聊天页强化 RAG 引用与工具调用轨迹：来源胶囊、工具卡片、流式打字光标。</li>
+    <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>执行监控新增链路可视化：LLM / RAG / Tool 步骤横向流水，耗时与 Token 一眼定位。</li>
+    <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>统一图标语言（内联 SVG）、状态徽章语义色、表格显式列宽、hover 微交互。</li>
+  </ul>
+  <div class="note-warn">注意：本稿为视觉概念稿，交互按钮多用于切换展示页；实际功能以代码为准，后续落地可直接按此视觉规范实施。</div>
+</aside>
+
+<div class="stage">
+  <div class="app">
+
+    <!-- ================= 侧边栏 ================= -->
+    <aside class="sidebar">
+      <div class="sb-logo">
+        <div class="tb-logo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 2l1.9 5.7L19.5 9.5l-5.6 1.8L12 17l-1.9-5.7L4.5 9.5l5.6-1.8z"/></svg>
+        </div>
+        <div><b>AgentHub</b><small>ENTERPRISE AI AGENT</small></div>
+      </div>
+
+      <div class="sb-org">
+        <div class="lbl">当前组织</div>
+        <div class="row">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>
+          星河智能
+          <span class="role">管理员</span>
+        </div>
+      </div>
+
+      <nav class="sb-nav">
+        <div class="nav-group">工作台</div>
+        <button class="nav-item" data-go="home"><svg class="ic"><use href="#i-home"/></svg>概览</button>
+        <button class="nav-item" data-go="org"><svg class="ic"><use href="#i-building"/></svg>我的组织</button>
+
+        <div class="nav-group">组织</div>
+        <button class="nav-item" data-go="org" data-tab="settings"><svg class="ic"><use href="#i-settings"/></svg>组织设置</button>
+        <button class="nav-item" data-go="org" data-tab="members"><svg class="ic"><use href="#i-users"/></svg>成员管理</button>
+
+        <div class="nav-group">智能体</div>
+        <button class="nav-item" data-go="agents"><svg class="ic"><use href="#i-bot"/></svg>智能体管理</button>
+        <button class="nav-item" data-go="knowledge"><svg class="ic"><use href="#i-book"/></svg>知识库</button>
+        <button class="nav-item" data-go="tools"><svg class="ic"><use href="#i-wrench"/></svg>工具</button>
+
+        <div class="nav-group">运行</div>
+        <button class="nav-item" data-go="chat"><svg class="ic"><use href="#i-chat"/></svg>AI 对话</button>
+        <button class="nav-item" data-go="executions"><svg class="ic"><use href="#i-activity"/></svg>执行监控</button>
+      </nav>
+
+      <div class="sb-foot">
+        <div class="sb-user">
+          <span class="avatar av-1 md">林</span>
+          <div><div class="un">林默</div><div class="ue">linmo@xinghe.ai</div></div>
+        </div>
+        <button class="logout" data-go="login">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          退出登录
+        </button>
+      </div>
+    </aside>
+
+    <!-- ================= 内容区 ================= -->
+    <main class="content">
+
+      <!-- ========== 视图 01：设计规范 ========== -->
+      <section class="screen" data-screen="design">
+        <div class="page-head">
+          <div>
+            <div class="page-title">设计规范</div>
+            <div class="page-sub">为 AgentHub V2 视觉升级沉淀的基础令牌与组件库，所有页面均按此规范构建</div>
+          </div>
+          <div class="actions">
+            <button class="btn ghost sm" data-go="home">进入产品预览 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+          </div>
+        </div>
+
+        <div class="grid g2" style="margin-top:20px">
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>色彩</div>
+            <div class="swatches" style="margin-top:14px">
+              <div class="swatch"><span class="sw" style="background:#12152f"></span><span><span class="swt">Ink 侧栏 / 强调文字</span><br><span class="swc">#12152F</span></span><span class="swd">导航底色 · 主文字</span></div>
+              <div class="swatch"><span class="sw" style="background:linear-gradient(135deg,#5b5bd6,#8b5cf6)"></span><span><span class="swt">Brand 主渐变</span><br><span class="swc">#5B5BD6 → #8B5CF6</span></span><span class="swd">Logo / 主按钮 / 激活</span></div>
+              <div class="swatch"><span class="sw" style="background:#4a44c9"></span><span><span class="swt">Accent Ink</span><br><span class="swc">#4A44C9</span></span><span class="swd">链接 / 文字按钮</span></div>
+              <div class="swatch"><span class="sw" style="background:#edf0ff"></span><span><span class="swt">Accent Soft</span><br><span class="swc">#EDF0FF</span></span><span class="swd">选中底 / hover 底</span></div>
+              <div class="swatch"><span class="sw" style="background:#f3f4fa"></span><span><span class="swt">Canvas</span><br><span class="swc">#F3F4FA</span></span><span class="swd">内容区底色</span></div>
+              <div class="swatch"><span class="sw" style="background:#0e9f6e"></span><span><span class="swt">Success</span><br><span class="swc">#0E9F6E</span></span><span class="swd">启用 / 成功</span></div>
+              <div class="swatch"><span class="sw" style="background:#d97706"></span><span><span class="swt">Warning</span><br><span class="swc">#D97706</span></span><span class="swd">停用 / 回滚</span></div>
+              <div class="swatch"><span class="sw" style="background:#dc2626"></span><span><span class="swt">Danger</span><br><span class="swc">#DC2626</span></span><span class="swd">删除 / 失败</span></div>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>排印</div>
+            <div class="type-row" style="margin-top:14px"><span class="tr-name">Display / 21</span><span class="tr-sample" style="font-size:21px;font-weight:700">智能体管理</span></div>
+            <div class="type-row"><span class="tr-name">Card / 15</span><span class="tr-sample" style="font-size:15px;font-weight:700">基础信息</span></div>
+            <div class="type-row"><span class="tr-name">Body / 13.5</span><span class="tr-sample" style="font-size:13.5px">正文内容，行高 1.7，用于描述与对话气泡。</span></div>
+            <div class="type-row"><span class="tr-name">Label / 12</span><span class="tr-sample" style="font-size:12px;color:var(--ink-2)">辅助说明与字段标签</span></div>
+            <div class="type-row"><span class="tr-name">Mono / 12</span><span class="tr-sample" style="font-family:var(--mono);font-size:12px">deepseek-chat · v3 · 1,280 tokens</span></div>
+            <div class="type-row"><span class="tr-name">行高体系</span><span class="tr-sample" style="font-size:12px;color:var(--ink-2)">标题 1.4 · 正文 1.7 · 紧凑行 1.5</span></div>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+              <span class="tag">openai</span><span class="tag">gpt-4o-mini</span><span class="tag">chunk 512/64</span><span class="tag">1,280 tokens</span><span class="tag">86 ms</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g3" style="margin-top:16px">
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>按钮</div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+              <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn primary">新建智能体</button><button class="btn ghost">查看</button><button class="btn danger">删除</button></div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn primary sm">开始对话</button><button class="btn ghost sm">编辑</button><button class="btn danger-ghost sm">停用</button><button class="btn ghost xs">查看 / 测试</button></div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn primary" disabled>处理中…</button><button class="btn ghost" disabled>加载中…</button></div>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>状态徽章</div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px">
+              <span class="badge ok">已启用</span><span class="badge off">已停用</span><span class="badge proc">12 处理中</span>
+              <span class="badge accent">管理员</span><span class="badge info">计算器</span><span class="badge warn">回滚</span><span class="badge err">执行失败</span><span class="badge ok">成功</span>
+            </div>
+            <div class="card-sub" style="margin-top:14px">语义色 + 圆点前缀，状态一眼可辨；角色、类型徽章统一此体系。</div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>表单控件</div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
+              <div class="input"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="搜索智能体…"></div>
+              <div style="display:flex;gap:10px"><select class="select" style="flex:1"><option>全部状态</option></select><select class="select" style="flex:1"><option>全部 Agent</option></select></div>
+              <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2)"><input type="checkbox" style="width:15px;height:15px;accent-color:var(--accent)">启用工具绑定</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g3" style="margin-top:16px">
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8h.01M10 12h4v5h-4"/></svg>头像</div>
+            <div style="display:flex;gap:14px;align-items:center;margin-top:14px">
+              <span class="avatar av-1 md">客</span><span class="avatar av-2 md">数</span><span class="avatar av-3 md">文</span>
+              <span class="avatar av-4 md">舆</span><span class="avatar av-5 md">知</span><span class="avatar av-6 md">工</span>
+            </div>
+            <div class="card-sub" style="margin-top:12px">取名称首字 + 6 组同色系渐变；有头像地址时替换为图片。</div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>卡片</div>
+            <div class="card" style="border-color:var(--line-2);box-shadow:var(--sh-1);margin-top:14px;padding:14px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span class="avatar av-1 sm">客</span>
+                <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">客服助手</div><div style="font-size:11px;color:var(--ink-3)">当前版本 v3</div></div>
+                <span class="badge ok">已启用</span>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary xs">对话</button><button class="btn ghost xs">查看</button><button class="btn ghost xs">编辑</button></div>
+            </div>
+            <div class="card-sub" style="margin-top:10px">白底 + 发丝边框 + 双层柔和阴影，圆角 14px。</div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></svg>表格</div>
+            <div class="table-wrap" style="margin-top:14px;box-shadow:none">
+              <table class="tbl" style="min-width:0">
+                <colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup>
+                <thead><tr><th>开始时间</th><th>Agent</th><th>Token</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr><td class="muted num">09-21 14:32:08</td><td class="strong">客服助手</td><td class="num">2,431</td><td><span class="badge ok">成功</span></td></tr>
+                  <tr><td class="muted num">09-21 14:18:44</td><td class="strong">数据分析师</td><td class="num">4,102</td><td><span class="badge err">失败</span></td></tr>
+                  <tr><td class="muted num">09-21 13:57:20</td><td class="strong">文档问答助手</td><td class="num">1,875</td><td><span class="badge ok">成功</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-sub" style="margin-top:10px">列宽显式声明，数值等宽字体对齐，行 hover 高亮。</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 02：登录 ========== -->
+      <section class="screen" data-screen="login">
+        <div class="login-wrap card" style="overflow:hidden">
+          <div class="login-brand">
+            <div class="rel">
+              <div class="lb-head">
+                <div class="tb-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="white"><path d="M12 2l1.9 5.7L19.5 9.5l-5.6 1.8L12 17l-1.9-5.7L4.5 9.5l5.6-1.8z"/></svg></div>
+                AgentHub
+              </div>
+              <div class="lb-tag">ENTERPRISE AI AGENT PLATFORM</div>
+              <h2>让团队把 AI Agent<br><em>真正用起来</em></h2>
+              <div class="lb-sub">基于企业知识库与工具调用的智能体平台：配置 Agent、挂载 RAG、调用工具，并在一个工作台里完成对话与执行监控。</div>
+              <div class="lb-feats">
+                <div class="lb-feat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>可视化配置 Agent 与版本，发布 / 回滚一条链路</div>
+                <div class="lb-feat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>上传文档即构建知识库，向量检索 + 引用溯源</div>
+                <div class="lb-feat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>计算器 / HTTP 工具接入，Agent 按需调用</div>
+                <div class="lb-feat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>SSE 流式对话，执行链路全量可观测</div>
+              </div>
+              <div class="lb-foot">© 2026 AgentHub · 企业级 AI Agent 平台</div>
+            </div>
+          </div>
+
+          <div class="login-form">
+            <div class="lf-title">欢迎回来</div>
+            <div class="lf-sub">登录 AgentHub 工作台，继续管理你的智能体</div>
+            <div class="fields">
+              <div class="field">
+                <label class="lbl" for="lg-email">邮箱</label>
+                <div class="input"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg><input id="lg-email" type="email" placeholder="you@company.com" value="linmo@xinghe.ai"></div>
+              </div>
+              <div class="field">
+                <label class="lbl" for="lg-pwd">密码</label>
+                <div class="input"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><input id="lg-pwd" type="password" placeholder="请输入密码" value="············"></div>
+              </div>
+            </div>
+            <div class="lf-links">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)"><input type="checkbox" style="width:14px;height:14px;accent-color:var(--accent)" checked> 记住我</label>
+              <a href="#" onclick="return false">忘记密码？</a>
+            </div>
+            <button class="btn primary" style="margin-top:18px" data-toast="演示环境：登录成功后进入概览页">登 录</button>
+            <div class="lf-foot">还没有账号？<a href="#" onclick="return false" style="font-weight:600">立即注册</a> · 演示账号可直接使用</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 03：概览（工作台） ========== -->
+      <section class="screen" data-screen="home">
+        <div class="page-head">
+          <div>
+            <div class="page-title">你好，林默</div>
+            <div class="page-sub">欢迎回到星河智能 · 今天已执行 128 次 Agent 调用，成功率 96.1%</div>
+          </div>
+          <div class="actions">
+            <button class="btn ghost" data-go="chat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>AI 对话</button>
+            <button class="btn primary" data-go="agent-detail"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>新建智能体</button>
+          </div>
+        </div>
+
+        <div class="grid g4" style="margin-top:20px">
+          <div class="card stat">
+            <div class="lbl"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>智能体</div>
+            <div class="val">6</div>
+            <div class="delta">本月新增 <b class="up">+2</b></div>
+            <svg class="spark" viewBox="0 0 86 38" fill="none" stroke="url(#sg1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="sg1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5b5bd6"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs><path d="M2 30 C12 28 14 20 22 22 S34 30 40 24 S52 12 58 16 S72 18 84 8"/></svg>
+          </div>
+          <div class="card stat">
+            <div class="lbl"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>知识库文档</div>
+            <div class="val">342</div>
+            <div class="delta">本周新增 <b class="up">+28</b></div>
+            <svg class="spark" viewBox="0 0 86 38" fill="none" stroke="url(#sg2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="sg2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><path d="M2 26 C14 24 16 30 24 26 S36 14 44 18 S56 22 62 14 S74 10 84 12"/></svg>
+          </div>
+          <div class="card stat">
+            <div class="lbl"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>工具</div>
+            <div class="val">4</div>
+            <div class="delta">含 <b class="up">2</b> 个 HTTP 工具</div>
+            <svg class="spark" viewBox="0 0 86 38" fill="none" stroke="url(#sg3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="sg3" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#10b981"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient></defs><path d="M2 28 C10 26 14 18 22 20 S32 26 38 18 S50 8 58 12 S72 14 84 6"/></svg>
+          </div>
+          <div class="card stat">
+            <div class="lbl"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>今日执行</div>
+            <div class="val">128</div>
+            <div class="delta">成功率 <b class="up">96.1%</b></div>
+            <svg class="spark" viewBox="0 0 86 38" fill="none" stroke="url(#sg4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><defs><linearGradient id="sg4" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f59e0b"/><stop offset="1" stop-color="#ef4444"/></linearGradient></defs><path d="M2 32 C12 30 14 22 22 24 S34 28 40 20 S52 10 58 14 S72 12 84 4"/></svg>
+          </div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1.6fr 1fr;margin-top:16px">
+          <div class="card card-pad">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>最近执行</div>
+              <button class="btn ghost xs" data-go="executions">查看全部 <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+            </div>
+            <div class="table-wrap" style="margin-top:14px;box-shadow:none;border-color:var(--line)">
+              <table class="tbl" style="min-width:0">
+                <colgroup><col style="width:26%"><col style="width:20%"><col style="width:14%"><col style="width:18%"><col style="width:22%"></colgroup>
+                <thead><tr><th>开始时间</th><th>Agent</th><th>步骤</th><th>Token</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr class="clickable" data-go="exec-detail"><td class="muted num">09-22 10:42:11</td><td class="strong">客服助手</td><td class="num">4</td><td class="num">2,431</td><td><span class="badge ok">成功</span></td></tr>
+                  <tr class="clickable" data-go="exec-detail"><td class="muted num">09-22 10:38:57</td><td class="strong">数据分析师</td><td class="num">5</td><td class="num">4,102</td><td><span class="badge err">失败</span></td></tr>
+                  <tr class="clickable" data-go="exec-detail"><td class="muted num">09-22 10:31:40</td><td class="strong">文档问答助手</td><td class="num">3</td><td class="num">1,875</td><td><span class="badge ok">成功</span></td></tr>
+                  <tr class="clickable" data-go="exec-detail"><td class="muted num">09-22 10:20:06</td><td class="strong">客服助手</td><td class="num">4</td><td class="num">2,109</td><td><span class="badge ok">成功</span></td></tr>
+                  <tr class="clickable" data-go="exec-detail"><td class="muted num">09-22 10:05:33</td><td class="strong">舆情监控员</td><td class="num">2</td><td class="num">968</td><td><span class="badge ok">成功</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card card-pad">
+              <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>当前组织</div>
+              <div style="display:flex;align-items:center;gap:11px;margin-top:13px">
+                <span class="avatar av-2 md" style="border-radius:11px;font-size:15px">星</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:14px;font-weight:700">星河智能</div>
+                  <div style="font-size:11.5px;color:var(--ink-3)">企业拥有者 周衍 · 12 名成员</div>
+                </div>
+                <span class="badge accent">管理员</span>
+              </div>
+              <div class="divider"></div>
+              <div style="display:flex;gap:8px">
+                <button class="btn ghost sm" data-go="org" data-tab="members">成员管理</button>
+                <button class="btn ghost sm" data-go="org" data-tab="settings">组织设置</button>
+              </div>
+            </div>
+
+            <div class="card card-pad">
+              <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></svg>快捷入口</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:13px">
+                <button class="btn ghost sm" data-go="chat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>发起对话</button>
+                <button class="btn ghost sm" data-go="agents"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>新建智能体</button>
+                <button class="btn ghost sm" data-go="knowledge"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>上传文档</button>
+                <button class="btn ghost sm" data-go="executions"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>执行监控</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 04：智能体管理 ========== -->
+      <section class="screen" data-screen="agents">
+        <div class="page-head">
+          <div>
+            <div class="page-title">智能体管理</div>
+            <div class="page-sub">星河智能 · 智能体配置、版本与生命周期管理</div>
+          </div>
+          <div class="actions">
+            <button class="btn primary" data-go="agent-detail"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>新建智能体</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <div class="input" style="width:260px"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="按名称搜索智能体…"></div>
+          <div class="tabs" id="agent-status-tabs">
+            <button class="active" data-filter="all">全部</button>
+            <button data-filter="enabled">已启用</button>
+            <button data-filter="disabled">已停用</button>
+          </div>
+          <span style="margin-left:auto;font-size:12px;color:var(--ink-3)">共 6 个智能体</span>
+        </div>
+
+        <div class="grid g3" style="margin-top:16px">
+          <!-- 客服助手 -->
+          <div class="card card-pad" data-status="enabled" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:11px">
+              <span class="avatar av-1 md">客</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">客服助手</span>
+                  <span class="badge ok">已启用</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">当前版本 <span class="tag">v3</span> · deepseek-chat</div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">面向售前与售后的企业客服智能体，基于产品手册与售后知识库回答，可调用计算器处理退换货数据。</p>
+            <div style="font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>创建于 2026-08-14</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-go="chat">对话</button>
+              <button class="btn ghost sm" data-go="agent-detail">查看</button>
+              <button class="btn ghost sm" data-toast="演示：打开编辑表单">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：停用智能体">停用</button>
+            </div>
+          </div>
+          <!-- 数据分析师 -->
+          <div class="card card-pad" data-status="enabled" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:11px">
+              <span class="avatar av-2 md">数</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">数据分析师</span>
+                  <span class="badge ok">已启用</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">当前版本 <span class="tag">v2</span> · gpt-4o-mini</div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">经营数据问答与报表解读，绑定通用计算器工具，支持指标对比与趋势分析。</p>
+            <div style="font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>创建于 2026-08-20</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-go="chat">对话</button>
+              <button class="btn ghost sm" data-toast="演示：打开智能体详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：打开编辑表单">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：停用智能体">停用</button>
+            </div>
+          </div>
+          <!-- 文档问答助手 -->
+          <div class="card card-pad" data-status="enabled" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:11px">
+              <span class="avatar av-3 md">文</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">文档问答助手</span>
+                  <span class="badge ok">已启用</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">当前版本 <span class="tag">v1</span> · glm-4-flash</div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">基于内部制度库与产品文档的 RAG 问答，回答附带引用来源，便于核对。</p>
+            <div style="font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>创建于 2026-09-02</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-go="chat">对话</button>
+              <button class="btn ghost sm" data-toast="演示：打开智能体详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：打开编辑表单">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：停用智能体">停用</button>
+            </div>
+          </div>
+          <!-- 舆情监控员 -->
+          <div class="card card-pad" data-status="disabled" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:11px">
+              <span class="avatar av-4 md">舆</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">舆情监控员</span>
+                  <span class="badge warn">已停用</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">当前版本 <span class="tag">v2</span> · claude-3-5-haiku</div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">社媒舆情摘要与预警，通过 HTTP 工具抓取公开信息源，暂未启用。</p>
+            <div style="font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>创建于 2026-08-28</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn ghost sm" data-toast="演示：已停用智能体不可发起对话" disabled>对话</button>
+              <button class="btn ghost sm" data-toast="演示：打开智能体详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：打开编辑表单">编辑</button>
+              <button class="btn ghost sm" style="margin-left:auto;color:var(--green);border-color:#bfe8d8" data-toast="演示：启用智能体">启用</button>
+            </div>
+          </div>
+          <!-- 商品推荐官 -->
+          <div class="card card-pad" data-status="enabled" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:11px">
+              <span class="avatar av-5 md">推</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">商品推荐官</span>
+                  <span class="badge ok">已启用</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">当前版本 <span class="tag">v1</span> · zhipu / glm-4-flash</div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">商品库问答与推荐话术生成，绑定产品手册知识库。</p>
+            <div style="font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>创建于 2026-09-10</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-go="chat">对话</button>
+              <button class="btn ghost sm" data-toast="演示：打开智能体详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：打开编辑表单">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：停用智能体">停用</button>
+            </div>
+          </div>
+          <!-- 测试助手（暂无版本） -->
+          <div class="card card-pad" data-status="disabled" style="display:flex;flex-direction:column;gap:12px;border-style:dashed">
+            <div style="display:flex;align-items:center;gap:11px">
+              <span class="avatar av-6 md">测</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">沙箱测试</span>
+                  <span class="badge off">已停用</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">暂无版本</div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">Prompt 与工具联调沙箱，未发布任何版本。</p>
+            <div style="font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:5px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>创建于 2026-09-18</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn ghost sm" disabled data-toast="演示：无版本不可对话">对话</button>
+              <button class="btn ghost sm" data-toast="演示：打开智能体详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：打开编辑表单">编辑</button>
+              <button class="btn ghost sm" style="margin-left:auto;color:var(--green);border-color:#bfe8d8" data-toast="演示：启用智能体">启用</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 05：智能体详情 ========== -->
+      <section class="screen" data-screen="agent-detail">
+        <button class="btn ghost xs" data-go="agents" style="margin-bottom:14px">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>返回智能体列表
+        </button>
+
+        <div class="card card-pad" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <span class="avatar av-1 lg">客</span>
+          <div style="flex:1;min-width:220px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="font-size:20px;font-weight:700">客服助手</span>
+              <span class="badge ok">已启用</span>
+              <span class="tag">当前版本 v3</span>
+            </div>
+            <div style="font-size:12.5px;color:var(--ink-3);margin-top:4px">面向售前与售后的企业客服智能体 · 由 周衍 创建于 2026-08-14</div>
+          </div>
+          <div style="display:flex;gap:9px">
+            <button class="btn primary" data-go="chat"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>开始对话</button>
+            <button class="btn danger-ghost" data-toast="演示：停用智能体">停用</button>
+            <button class="btn ghost" data-toast="演示：打开编辑表单"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>编辑</button>
+          </div>
+        </div>
+
+        <div class="grid g2" style="margin-top:16px">
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>基础信息</div>
+            <dl class="kv" style="margin-top:8px">
+              <div class="row"><dt>描述</dt><dd>面向售前与售后的企业客服智能体，基于产品手册与售后知识库回答，可调用计算器处理退换货数据。</dd></div>
+              <div class="row"><dt>创建者</dt><dd>周衍</dd></div>
+              <div class="row"><dt>创建时间</dt><dd class="num">2026-08-14 10:24:36</dd></div>
+              <div class="row"><dt>更新时间</dt><dd class="num">2026-09-21 16:08:12</dd></div>
+            </dl>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></svg>当前版本 v3</div>
+            <dl class="kv" style="margin-top:8px">
+              <div class="row"><dt>模型</dt><dd><span class="tag">deepseek</span> <span class="tag" style="margin-left:6px">deepseek-chat</span></dd></div>
+              <div class="row" style="display:flex;gap:36px"><div style="flex:1"><dt>Temperature</dt><dd class="mono">0.3</dd></div><div style="flex:1"><dt>Max Tokens</dt><dd class="mono">2,048</dd></div></div>
+              <div class="row"><dt>版本说明</dt><dd>接入售后知识库，优化工具调用提示词，修复引用格式。</dd></div>
+            </dl>
+            <div class="divider"></div>
+            <div style="font-size:12px;color:var(--ink-3);font-weight:600">系统提示词</div>
+            <pre style="font-family:var(--mono);font-size:11.5px;line-height:1.7;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:8px;max-height:120px;overflow:auto;color:var(--ink-2);white-space:pre-wrap">你是「客服助手」，一家电商企业的智能客服。
+规则：
+1. 优先检索售后知识库与产品手册，回答须附引用来源；
+2. 涉及退换货金额、占比等计算时，先调用「通用计算器」工具；
+3. 无法确定的信息如实说明，不编造政策。</pre>
+          </div>
+        </div>
+
+        <div class="grid g2" style="margin-top:16px">
+          <div class="card card-pad">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg>版本历史</div>
+              <button class="btn primary sm" data-toast="演示：新建版本">新建版本</button>
+            </div>
+            <div class="vlist" style="margin-top:16px">
+              <div class="vitem current">
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                  <span class="tag" style="color:var(--accent-ink);border-color:#cfd4ff;background:var(--accent-soft)">v3</span>
+                  <span style="font-size:13px;font-weight:700">接入售后知识库 + 工具调用优化</span>
+                  <span class="badge accent" style="margin-left:auto">当前</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:3px">周衍 · 2026-09-21 16:08</div>
+              </div>
+              <div class="vitem">
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                  <span class="tag">v2</span>
+                  <span style="font-size:13px;font-weight:700">优化客服话术与温度参数</span>
+                  <button class="btn danger-ghost xs" style="margin-left:auto" data-toast="演示：回滚到 v2">回滚</button>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:3px">林默 · 2026-09-05 11:20</div>
+              </div>
+              <div class="vitem">
+                <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                  <span class="tag">v1</span>
+                  <span style="font-size:13px;font-weight:700">初始版本（deepseek-chat）</span>
+                  <button class="btn danger-ghost xs" style="margin-left:auto" data-toast="演示：回滚到 v1">回滚</button>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:3px">周衍 · 2026-08-14 10:24</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>工具</div>
+              <a href="#" onclick="return false" style="font-size:12px;font-weight:600">管理工具库 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+            </div>
+            <div class="card-sub">对话中智能体将按需调用已启用工具（Tool Calling）</div>
+
+            <div style="display:flex;flex-direction:column;gap:9px;margin-top:14px">
+              <div style="display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:11px;padding:10px 12px">
+                <span class="badge info" style="background:var(--accent-soft);color:var(--accent-ink)">计算器</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:700">通用计算器</div>
+                  <div style="font-size:11.5px;color:var(--ink-3)">四则运算与百分比计算</div>
+                </div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)"><input type="checkbox" style="width:15px;height:15px;accent-color:var(--accent)" checked> 启用</label>
+                <button class="btn ghost xs" data-toast="演示：解绑工具">解绑</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:11px;padding:10px 12px;opacity:.75">
+                <span class="badge ok">HTTP</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:700">汇率查询</div>
+                  <div style="font-size:11.5px;color:var(--ink-3)">GET /api/rates · 实时汇率</div>
+                </div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)"><input type="checkbox" style="width:15px;height:15px;accent-color:var(--accent)"> 启用</label>
+                <button class="btn ghost xs" data-toast="演示：解绑工具">解绑</button>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:9px;margin-top:14px;border-top:1px dashed var(--line);padding-top:14px">
+              <select class="select" style="flex:1"><option>选择要绑定的工具…</option><option>汇率查询</option><option>天气查询</option></select>
+              <button class="btn primary sm" data-toast="演示：绑定工具">绑定</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-pad" style="margin-top:16px;border-color:#f2c6c6;background:linear-gradient(0deg,#fffdfd,#fff)">
+          <div class="card-title" style="color:var(--red)"><svg class="ic" style="color:var(--red)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>危险区</div>
+          <div style="margin-top:13px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:220px">
+              <div style="font-size:13px;font-weight:700">删除智能体</div>
+              <div style="font-size:12px;color:var(--ink-3);margin-top:2px">请输入智能体名称确认，删除后所有版本一并清除且不可恢复</div>
+            </div>
+            <div class="input" style="width:220px"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><input placeholder="请输入“客服助手”"></div>
+            <button class="btn danger" data-toast="演示：名称匹配后方可删除">删除</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 06：知识库 ========== -->
+      <section class="screen" data-screen="knowledge">
+        <div class="page-head">
+          <div>
+            <div class="page-title">知识库</div>
+            <div class="page-sub">星河智能 · 企业文档管理、向量化与 RAG 检索测试</div>
+          </div>
+          <div class="actions">
+            <button class="btn primary" data-toast="演示：新建知识库"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>新建知识库</button>
+          </div>
+        </div>
+
+        <div class="grid g3" style="margin-top:18px">
+          <div class="card card-pad" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="avatar av-1 md" style="border-radius:11px">产</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px"><span style="font-size:14.5px;font-weight:700">产品手册库</span></div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px"><span class="tag">bge-m3</span> 片段 <span class="tag">512/64</span></div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">全系列产品规格、功能介绍与 FAQ，供客服助手与商品推荐官检索。</p>
+            <div style="font-size:11.5px;color:var(--ink-3)">128 个文档 · 更新于 09-21</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-toast="演示：打开知识库详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：编辑知识库">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：删除知识库">删除</button>
+            </div>
+          </div>
+
+          <div class="card card-pad" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="avatar av-2 md" style="border-radius:11px">售</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">售后知识库</span>
+                  <span class="badge proc">12 处理中</span>
+                </div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px"><span class="tag">bge-m3</span> 片段 <span class="tag">512/64</span></div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">退换货政策、售后流程与工单模板，正在增量导入 9 月新增文档。</p>
+            <div style="font-size:11.5px;color:var(--ink-3)">96 个文档 · 更新于 09-22</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-toast="演示：打开知识库详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：编辑知识库">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：删除知识库">删除</button>
+            </div>
+          </div>
+
+          <div class="card card-pad" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="avatar av-3 md" style="border-radius:11px">制</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px"><span style="font-size:14.5px;font-weight:700">内部制度库</span></div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px"><span class="tag">text-embedding-3</span> 片段 <span class="tag">256/32</span></div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">行政、财务与人事制度文档，供文档问答助手检索引用。</p>
+            <div style="font-size:11.5px;color:var(--ink-3)">64 个文档 · 更新于 09-18</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-toast="演示：打开知识库详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：编辑知识库">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：删除知识库">删除</button>
+            </div>
+          </div>
+
+          <div class="card card-pad" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="avatar av-4 md" style="border-radius:11px">行</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px"><span style="font-size:14.5px;font-weight:700">行业资讯库</span></div>
+                <div style="font-size:11.5px;color:var(--ink-3);margin-top:2px"><span class="tag">bge-m3</span> 片段 <span class="tag">512/64</span></div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">公开行业报告与资讯摘要，供舆情监控员做事实核查。</p>
+            <div style="font-size:11.5px;color:var(--ink-3)">54 个文档 · 更新于 09-15</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-toast="演示：打开知识库详情">查看</button>
+              <button class="btn ghost sm" data-toast="演示：编辑知识库">编辑</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：删除知识库">删除</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 07：工具 ========== -->
+      <section class="screen" data-screen="tools">
+        <div class="page-head">
+          <div>
+            <div class="page-title">工具</div>
+            <div class="page-sub">星河智能 · Agent 可调用的外部工具（计算器 / HTTP）</div>
+          </div>
+          <div class="actions">
+            <button class="btn primary" data-toast="演示：新建工具"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>新建工具</button>
+          </div>
+        </div>
+
+        <div class="grid g3" style="margin-top:18px">
+          <div class="card card-pad" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="avatar av-5 md" style="border-radius:11px">算</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">通用计算器</span>
+                  <span class="badge accent">计算器</span>
+                </div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">四则运算与百分比计算，支持表达式求值，绑定于客服助手与数据分析师。</p>
+            <div style="font-size:11.5px;color:var(--ink-3)">更新于 09-12</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-toast="演示：打开工具测试台">查看 / 测试</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：删除工具">删除</button>
+            </div>
+          </div>
+
+          <div class="card card-pad" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="avatar av-2 md" style="border-radius:11px">汇</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">汇率查询</span>
+                  <span class="badge ok">HTTP</span>
+                </div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">GET https://api.example.com/rates，返回主要货币实时汇率。</p>
+            <div style="font-size:11.5px;color:var(--ink-3)">更新于 09-10</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-toast="演示：打开工具测试台">查看 / 测试</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：删除工具">删除</button>
+            </div>
+          </div>
+
+          <div class="card card-pad" style="display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="avatar av-6 md" style="border-radius:11px">天</span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14.5px;font-weight:700">天气查询</span>
+                  <span class="badge ok">HTTP</span>
+                </div>
+              </div>
+            </div>
+            <p style="font-size:12.5px;color:var(--ink-2);line-height:1.65;min-height:40px">GET https://api.example.com/weather，按城市返回天气与温度。</p>
+            <div style="font-size:11.5px;color:var(--ink-3)">更新于 09-08</div>
+            <div style="display:flex;gap:8px;margin-top:auto;padding-top:4px">
+              <button class="btn primary sm" data-toast="演示：打开工具测试台">查看 / 测试</button>
+              <button class="btn danger-ghost sm" style="margin-left:auto" data-toast="演示：删除工具">删除</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 08：AI 对话 ========== -->
+      <section class="screen" data-screen="chat" style="max-width:none;padding-left:22px;padding-right:22px">
+        <div class="chat-grid">
+          <!-- 会话列表 -->
+          <div class="session-pane">
+            <div class="sp-head">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <span style="font-size:13.5px;font-weight:700">会话</span>
+                <button class="btn primary xs" style="margin-left:auto" data-toast="演示：新建会话"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>新建</button>
+              </div>
+              <div class="input"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="搜索会话…"></div>
+            </div>
+            <div class="sp-list">
+              <div class="session-item active">
+                <span class="avatar av-1 sm">客</span>
+                <div style="flex:1;min-width:0">
+                  <div class="si-name">客服助手 <span class="badge ok" style="padding:0 7px;font-size:10px">进行中</span></div>
+                  <div class="si-last">根据产品手册，SKU-2031 支持 7 天无理由退货…</div>
+                </div>
+                <span class="si-time">10:42</span>
+                <button class="si-del" style="border:0;background:none;color:var(--ink-3)" data-toast="演示：删除会话"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+              </div>
+              <div class="session-item">
+                <span class="avatar av-2 sm">数</span>
+                <div style="flex:1;min-width:0">
+                  <div class="si-name">数据分析师</div>
+                  <div class="si-last">Q3 退货率 3.2%，环比下降 0.4pct…</div>
+                </div>
+                <span class="si-time">昨天</span>
+                <button class="si-del" style="border:0;background:none;color:var(--ink-3)" data-toast="演示：删除会话"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+              </div>
+              <div class="session-item">
+                <span class="avatar av-3 sm">文</span>
+                <div style="flex:1;min-width:0">
+                  <div class="si-name">文档问答助手</div>
+                  <div class="si-last">差旅报销标准见《财务制度 4.2》…</div>
+                </div>
+                <span class="si-time">周一</span>
+                <button class="si-del" style="border:0;background:none;color:var(--ink-3)" data-toast="演示：删除会话"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+              </div>
+              <div class="session-item">
+                <span class="avatar av-4 sm">舆</span>
+                <div style="flex:1;min-width:0">
+                  <div class="si-name">舆情监控员 <span class="badge off" style="padding:0 7px;font-size:10px">已停用</span></div>
+                  <div class="si-last">会话已归档，智能体停用后不可继续对话…</div>
+                </div>
+                <span class="si-time">09-15</span>
+                <button class="si-del" style="border:0;background:none;color:var(--ink-3)" data-toast="演示：删除会话"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 消息区 -->
+          <div class="chat-main">
+            <div class="chat-head">
+              <span class="avatar av-1 sm">客</span>
+              <div>
+                <div class="ch-name">客服助手</div>
+                <div class="ch-status">在线 · 基于 v3 版本回答</div>
+              </div>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button class="btn ghost xs" data-toast="演示：清除上下文"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>新对话</button>
+              </div>
+            </div>
+
+            <div class="chat-body">
+              <div class="msg user">
+                <span class="avatar av-1 sm" style="background:linear-gradient(135deg,#5b5bd6,#7c5cfc)">林</span>
+                <div>
+                  <div class="msg-bubble">帮我查一下上个月退货率最高的三个 SKU，并给出处理建议</div>
+                  <div style="font-size:10.5px;color:var(--ink-3);margin-top:3px;text-align:right">10:41</div>
+                </div>
+              </div>
+
+              <div class="msg ai">
+                <span class="avatar av-1 sm" style="background:linear-gradient(135deg,#5b5bd6,#8b5cf6)">客</span>
+                <div>
+                  <div class="msg-bubble">
+                    已从售后知识库检索到 9 月退货明细，并结合工具完成占比计算。<br><br>
+                    上月退货率最高的三个 SKU 为：<br>
+                    1. <b>SKU-2031</b>（便携蓝牙音箱）—— 退货率 <b>6.8%</b>，主因「音质与描述不符」；<br>
+                    2. <b>SKU-1874</b>（无线充电器）—— 退货率 <b>5.9%</b>，主因「兼容性问题」；<br>
+                    3. <b>SKU-1568</b>（智能手环）—— 退货率 <b>4.2%</b>，主因「尺寸不合适」。<br><br>
+                    建议：针对 SKU-2031 更新详情页音质说明并增加试听片段，可显著降低主观性退货；SKU-1874 建议在兼容性列表中补充 iPhone 机型，并开放「兼容性咨询」入口。
+                    <div class="src-chips">
+                      <span class="src-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>售后知识库 · 9月退货明细.pdf · 2 段</span>
+                      <span class="src-chip"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>产品手册库 · SKU-2031 规格页 · 1 段</span>
+                    </div>
+                    <div class="tool-card">
+                      <div class="tc-head"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>调用了「通用计算器」 <span class="badge ok" style="padding:0 7px;font-size:10px">完成 · 45ms</span></div>
+                      <div class="tc-io"><span>输入：calculate(退货数 / 销量, SKU-2031…)</span><span class="tc-ok">输出：{"sku":"SKU-2031","rate":0.068}</span></div>
+                    </div>
+                    <div style="font-size:10.5px;color:var(--ink-3);margin-top:8px">10:42 · 2,431 tokens</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="msg user">
+                <span class="avatar av-1 sm" style="background:linear-gradient(135deg,#5b5bd6,#7c5cfc)">林</span>
+                <div>
+                  <div class="msg-bubble">SKU-2031 的详情页改版大概什么时候能上线？</div>
+                  <div style="font-size:10.5px;color:var(--ink-3);margin-top:3px;text-align:right">10:43</div>
+                </div>
+              </div>
+
+              <div class="msg ai">
+                <span class="avatar av-1 sm" style="background:linear-gradient(135deg,#5b5bd6,#8b5cf6)">客</span>
+                <div>
+                  <div class="msg-bubble">
+                    正在检索产品迭代排期，请稍候…
+                    <span class="typing"><i></i><i></i><i></i></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-input">
+              <div class="ci-box">
+                <textarea rows="1" placeholder="输入消息，Enter 发送，Shift+Enter 换行…">SKU-2031 的详情页改版大概什么时候能上线？</textarea>
+                <button class="ci-send" data-toast="演示：发送消息（SSE 流式回复）">
+                  <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                </button>
+              </div>
+              <div class="ci-hint">
+                <span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg> 回答基于会话绑定版本配置</span>
+                <span style="margin-left:auto">SSE 流式输出 · 支持中断生成</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 09：执行监控 ========== -->
+      <section class="screen" data-screen="executions">
+        <div class="page-head">
+          <div>
+            <div class="page-title">执行监控</div>
+            <div class="page-sub">星河智能 · Agent 执行链路（LLM / RAG / Tool / Token）</div>
+          </div>
+          <div class="actions">
+            <button class="btn ghost sm" data-toast="演示：刷新列表"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>刷新</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <select class="select"><option>全部 Agent</option><option>客服助手</option><option>数据分析师</option><option>文档问答助手</option></select>
+          <select class="select"><option>全部状态</option><option>成功</option><option>失败</option></select>
+          <div class="tabs"><button class="active">近 24 小时</button><button data-toast="演示：时间筛选">近 7 天</button><button data-toast="演示：时间筛选">近 30 天</button></div>
+          <span style="margin-left:auto;font-size:12px;color:var(--ink-3)">共 1,284 次执行</span>
+        </div>
+
+        <div class="table-wrap" style="margin-top:16px">
+          <table class="tbl">
+            <colgroup><col style="width:15%"><col style="width:12%"><col style="width:8%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:9%"><col style="width:26%"></colgroup>
+            <thead>
+              <tr><th>开始时间</th><th>Agent</th><th>步骤</th><th>Token</th><th>LLM 耗时</th><th>总耗时</th><th>状态</th><th>链路摘要</th></tr>
+            </thead>
+            <tbody>
+              <tr class="clickable" data-go="exec-detail">
+                <td class="muted num">09-22 10:42:11</td><td class="strong">客服助手</td><td class="num">4</td><td class="num">2,431</td><td class="num">1.86s</td><td class="num">2.34s</td>
+                <td><span class="badge ok">成功</span></td>
+                <td><span class="tag">rag</span> <span class="tag" style="margin-left:4px">llm</span> <span class="tag" style="margin-left:4px">tool</span> <span class="tag" style="margin-left:4px">llm</span></td>
+              </tr>
+              <tr class="clickable" data-go="exec-detail">
+                <td class="muted num">09-22 10:38:57</td><td class="strong">数据分析师</td><td class="num">5 <span style="color:var(--red);font-size:11px">(1 失败)</span></td><td class="num">4,102</td><td class="num">3.12s</td><td class="num">4.08s</td>
+                <td><span class="badge err">失败</span></td>
+                <td><span class="tag">rag</span> <span class="tag" style="margin-left:4px">llm</span> <span class="tag" style="margin-left:4px;border-color:#f2c6c6;color:var(--red);background:var(--red-bg)">tool ×</span> <span class="tag" style="margin-left:4px">llm</span></td>
+              </tr>
+              <tr class="clickable" data-go="exec-detail">
+                <td class="muted num">09-22 10:31:40</td><td class="strong">文档问答助手</td><td class="num">3</td><td class="num">1,875</td><td class="num">1.22s</td><td class="num">1.47s</td>
+                <td><span class="badge ok">成功</span></td>
+                <td><span class="tag">rag</span> <span class="tag" style="margin-left:4px">llm</span></td>
+              </tr>
+              <tr class="clickable" data-go="exec-detail">
+                <td class="muted num">09-22 10:20:06</td><td class="strong">客服助手</td><td class="num">4</td><td class="num">2,109</td><td class="num">1.68s</td><td class="num">2.02s</td>
+                <td><span class="badge ok">成功</span></td>
+                <td><span class="tag">rag</span> <span class="tag" style="margin-left:4px">llm</span> <span class="tag" style="margin-left:4px">tool</span> <span class="tag" style="margin-left:4px">llm</span></td>
+              </tr>
+              <tr class="clickable" data-go="exec-detail">
+                <td class="muted num">09-22 10:05:33</td><td class="strong">舆情监控员</td><td class="num">2</td><td class="num">968</td><td class="num">0.86s</td><td class="num">0.98s</td>
+                <td><span class="badge ok">成功</span></td>
+                <td><span class="tag">llm</span> <span class="tag" style="margin-left:4px">llm</span></td>
+              </tr>
+              <tr class="clickable" data-go="exec-detail">
+                <td class="muted num">09-22 09:54:18</td><td class="strong">商品推荐官</td><td class="num">3</td><td class="num">1,540</td><td class="num">1.31s</td><td class="num">1.58s</td>
+                <td><span class="badge ok">成功</span></td>
+                <td><span class="tag">rag</span> <span class="tag" style="margin-left:4px">llm</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pager">
+          <span>共 1,284 次执行 · 第 1 / 65 页</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn ghost xs" disabled>上一页</button>
+            <button class="btn ghost xs" data-toast="演示：翻页">下一页</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 10：执行详情 ========== -->
+      <section class="screen" data-screen="exec-detail">
+        <button class="btn ghost xs" data-go="executions" style="margin-bottom:14px">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>返回执行监控
+        </button>
+
+        <div class="card card-pad">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <span class="avatar av-1 md">客</span>
+            <div style="flex:1;min-width:220px">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span style="font-size:17px;font-weight:700">客服助手</span>
+                <span class="badge ok">执行成功</span>
+                <span class="tag">exec_9f2c1a</span>
+              </div>
+              <div style="font-size:12px;color:var(--ink-3);margin-top:4px">2026-09-22 10:42:11 · 会话 #2041 · 用户 林默</div>
+            </div>
+            <div style="display:flex;gap:26px;text-align:center">
+              <div><div style="font-size:20px;font-weight:700" class="num">2.34s</div><div style="font-size:11px;color:var(--ink-3)">总耗时</div></div>
+              <div><div style="font-size:20px;font-weight:700" class="num">2,431</div><div style="font-size:11px;color:var(--ink-3)">总 Token</div></div>
+              <div><div style="font-size:20px;font-weight:700" class="num">4</div><div style="font-size:11px;color:var(--ink-3)">执行步骤</div></div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <div style="font-size:12px;color:var(--ink-3);font-weight:600;margin-bottom:14px">执行链路</div>
+          <div class="chain">
+            <div class="chain-step ok">
+              <div class="cs-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></div>
+              <div class="cs-name">RAG 检索</div>
+              <div class="cs-time">86 ms</div>
+              <div class="cs-extra">命中 2 段</div>
+            </div>
+            <div class="chain-step ok">
+              <div class="cs-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg></div>
+              <div class="cs-name">LLM 生成</div>
+              <div class="cs-time">1.20s</div>
+              <div class="cs-extra">1,280 in / 320 out</div>
+            </div>
+            <div class="chain-step ok">
+              <div class="cs-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+              <div class="cs-name">工具调用</div>
+              <div class="cs-time">45 ms</div>
+              <div class="cs-extra">计算器</div>
+            </div>
+            <div class="chain-step ok">
+              <div class="cs-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg></div>
+              <div class="cs-name">LLM 汇总</div>
+              <div class="cs-time">890 ms</div>
+              <div class="cs-extra">831 in / 520 out</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g2" style="margin-top:16px">
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></svg>Token 用量</div>
+            <div class="table-wrap" style="margin-top:12px;box-shadow:none">
+              <table class="tbl" style="min-width:0">
+                <colgroup><col style="width:20%"><col style="width:24%"><col style="width:18%"><col style="width:18%"><col style="width:20%"></colgroup>
+                <thead><tr><th>轮次</th><th>模型</th><th>输入</th><th>输出</th><th>耗时</th></tr></thead>
+                <tbody>
+                  <tr><td class="strong">Round 1</td><td><span class="tag">deepseek-chat</span></td><td class="num">1,280</td><td class="num">320</td><td class="num">1.20s</td></tr>
+                  <tr><td class="strong">Round 2</td><td><span class="tag">deepseek-chat</span></td><td class="num">831</td><td class="num">520</td><td class="num">0.89s</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="display:flex;gap:18px;margin-top:12px;font-size:12px;color:var(--ink-3)">
+              <span>输入合计 <b class="num" style="color:var(--ink-1)">2,111</b></span>
+              <span>输出合计 <b class="num" style="color:var(--ink-1)">840</b></span>
+              <span>总 Token <b class="num" style="color:var(--ink-1)">2,431</b></span>
+            </div>
+          </div>
+
+          <div class="card card-pad">
+            <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>步骤明细</div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+              <div style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;padding:10px 12px">
+                <span class="badge info">RAG</span>
+                <div style="flex:1;min-width:0;font-size:12.5px;color:var(--ink-2)"><b style="color:var(--ink-1)">向量检索</b> · query "上月退货率最高 SKU"，Top-K=3，命中 2 段，耗时 <span class="num">86ms</span></div>
+                <span class="badge ok">成功</span>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;padding:10px 12px">
+                <span class="badge info" style="background:var(--accent-soft);color:var(--accent-ink)">LLM</span>
+                <div style="flex:1;min-width:0;font-size:12.5px;color:var(--ink-2)"><b style="color:var(--ink-1)">生成回答</b> · 构造上下文并请求 deepseek-chat，输出 320 tokens</div>
+                <span class="badge ok">成功</span>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;padding:10px 12px">
+                <span class="badge ok">TOOL</span>
+                <div style="flex:1;min-width:0;font-size:12.5px;color:var(--ink-2)"><b style="color:var(--ink-1)">通用计算器</b> · calculate(退货数/销量)，返回 rate=0.068</div>
+                <span class="badge ok">成功</span>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;padding:10px 12px">
+                <span class="badge info" style="background:var(--accent-soft);color:var(--accent-ink)">LLM</span>
+                <div style="flex:1;min-width:0;font-size:12.5px;color:var(--ink-2)"><b style="color:var(--ink-1)">结果汇总</b> · 结合工具结果输出最终建议</div>
+                <span class="badge ok">成功</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 视图 11：组织管理 ========== -->
+      <section class="screen" data-screen="org">
+        <div class="page-head">
+          <div>
+            <div class="page-title">组织管理</div>
+            <div class="page-sub">星河智能 · 成员与组织设置</div>
+          </div>
+          <div class="actions">
+            <div class="tabs" id="org-tabs">
+              <button class="active" data-orgtab="members">成员管理</button>
+              <button data-orgtab="settings">组织设置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 成员管理 -->
+        <div class="org-pane" data-orgpane="members">
+          <div class="card" style="margin-top:18px;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div class="input" style="width:240px"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="搜索成员…"></div>
+            <button class="btn primary" data-toast="演示：邀请成员"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>邀请成员</button>
+            <span style="margin-left:auto;font-size:12px;color:var(--ink-3)">共 12 名成员</span>
+          </div>
+
+          <div class="table-wrap" style="margin-top:16px">
+            <table class="tbl">
+              <colgroup><col style="width:26%"><col style="width:26%"><col style="width:16%"><col style="width:14%"><col style="width:18%"></colgroup>
+              <thead><tr><th>成员</th><th>邮箱</th><th>角色</th><th>加入时间</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><span style="display:flex;align-items:center;gap:9px"><span class="avatar av-2 sm" style="border-radius:8px">星</span><span class="strong">周衍</span></span></td><td class="muted">zhouyan@xinghe.ai</td><td><span class="badge accent">企业拥有者</span></td><td class="muted num">2026-08-02</td><td><span class="muted" style="font-size:12px">—</span></td></tr>
+                <tr><td><span style="display:flex;align-items:center;gap:9px"><span class="avatar av-1 sm">林</span><span class="strong">林默</span></span></td><td class="muted">linmo@xinghe.ai</td><td><span class="badge accent">管理员</span></td><td class="muted num">2026-08-02</td><td><button class="btn ghost xs" data-toast="演示：调整角色">调整角色</button></td></tr>
+                <tr><td><span style="display:flex;align-items:center;gap:9px"><span class="avatar av-3 sm">陈</span><span class="strong">陈嘉</span></span></td><td class="muted">chenjia@xinghe.ai</td><td><span class="badge off">普通用户</span></td><td class="muted num">2026-08-10</td><td><button class="btn ghost xs" data-toast="演示：调整角色">调整角色</button></td></tr>
+                <tr><td><span style="display:flex;align-items:center;gap:9px"><span class="avatar av-4 sm">赵</span><span class="strong">赵晴</span></span></td><td class="muted">zhaoqing@xinghe.ai</td><td><span class="badge off">普通用户</span></td><td class="muted num">2026-08-15</td><td><button class="btn ghost xs" data-toast="演示：调整角色">调整角色</button></td></tr>
+                <tr><td><span style="display:flex;align-items:center;gap:9px"><span class="avatar av-5 sm">许</span><span class="strong">许言</span></span></td><td class="muted">xuyan@xinghe.ai</td><td><span class="badge warn">查看者</span></td><td class="muted num">2026-09-01</td><td><button class="btn ghost xs" data-toast="演示：调整角色">调整角色</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:11.5px;color:var(--ink-3);margin-top:10px">角色权限：企业拥有者 / 管理员可管理智能体与成员；普通用户可发起对话；查看者仅只读。</p>
+        </div>
+
+        <!-- 组织设置 -->
+        <div class="org-pane" data-orgpane="settings" style="display:none">
+          <div class="grid g2" style="margin-top:18px">
+            <div class="card card-pad">
+              <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>组织信息</div>
+              <div style="display:flex;flex-direction:column;gap:13px;margin-top:14px">
+                <div class="field"><label class="lbl">组织名称</label><div class="input"><input value="星河智能"></div></div>
+                <div class="field"><label class="lbl">组织描述</label><div class="input"><input value="电商零售企业，覆盖售前咨询、售后支持与经营分析场景"></div></div>
+                <div style="display:flex;gap:9px;margin-top:4px">
+                  <button class="btn primary" data-toast="演示：保存设置">保存更改</button>
+                  <button class="btn ghost" data-toast="演示：已重置">取消</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card card-pad">
+              <div class="card-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>安全与配额</div>
+              <dl class="kv" style="margin-top:10px">
+                <div class="row"><dt>成员数上限</dt><dd class="num">50 人 · 已用 12</dd></div>
+                <div class="row"><dt>Agent 执行限额</dt><dd class="num">10,000 次 / 日</dd></div>
+                <div class="row"><dt>工具调用超时</dt><dd class="num">30 秒</dd></div>
+                <div class="row"><dt>组织隔离</dt><dd>数据按组织隔离，跨组织不可见</dd></div>
+              </dl>
+              <div style="display:flex;gap:9px;margin-top:12px">
+                <button class="btn ghost sm" data-toast="演示：成员管理页">成员管理</button>
+                <button class="btn danger-ghost sm" data-toast="演示：仅 owner 可解散组织">解散组织</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ================= 交互脚本 ================= -->
+<script>
+(function () {
+  'use strict';
+  var screens = Array.prototype.slice.call(document.querySelectorAll('.screen'));
+  var chips = Array.prototype.slice.call(document.querySelectorAll('#chips .chip'));
+  var navItems = Array.prototype.slice.call(document.querySelectorAll('.sidebar .nav-item'));
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+  var notes = document.getElementById('notes');
+
+  function showToast(msg) {
+    if (!toastEl || !msg) return;
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+  }
+
+  function setOrgTab(tab) {
+    var btns = document.querySelectorAll('#org-tabs button');
+    Array.prototype.forEach.call(btns, function (b) {
+      b.classList.toggle('active', b.getAttribute('data-orgtab') === tab);
+    });
+    var panes = document.querySelectorAll('.org-pane');
+    Array.prototype.forEach.call(panes, function (p) {
+      p.style.display = p.getAttribute('data-orgpane') === tab ? '' : 'none';
+    });
+  }
+
+  function applyAgentFilter(filter) {
+    var btns = document.querySelectorAll('#agent-status-tabs button');
+    Array.prototype.forEach.call(btns, function (b) {
+      b.classList.toggle('active', b.getAttribute('data-filter') === filter);
+    });
+    var cards = document.querySelectorAll('.screen[data-screen="agents"] .card[data-status]');
+    Array.prototype.forEach.call(cards, function (c) {
+      var st = c.getAttribute('data-status');
+      c.style.display = (filter === 'all' || st === filter) ? '' : 'none';
+    });
+  }
+
+  function go(name, tab) {
+    Array.prototype.forEach.call(screens, function (s) {
+      s.classList.toggle('active', s.getAttribute('data-screen') === name);
+    });
+    Array.prototype.forEach.call(chips, function (c) {
+      c.classList.toggle('active', c.getAttribute('data-go') === name);
+    });
+    Array.prototype.forEach.call(navItems, function (n) {
+      var isTarget = n.getAttribute('data-go') === name;
+      if (isTarget && tab) isTarget = (n.getAttribute('data-tab') || null) === tab;
+      n.classList.toggle('active', isTarget);
+    });
+    if (tab) setOrgTab(tab);
+    var content = document.querySelector('.content');
+    if (content) content.scrollTop = 0;
+    if (notes && notes.classList.contains('open')) notes.classList.remove('open');
+  }
+
+  document.addEventListener('click', function (e) {
+    var hit = e.target.closest('[data-go],[data-tab],[data-toast],[data-filter],[data-orgtab],#btn-notes,#btn-notes-close');
+    if (!hit) return;
+    if (hit.id === 'btn-notes') { if (notes) notes.classList.add('open'); return; }
+    if (hit.id === 'btn-notes-close') { if (notes) notes.classList.remove('open'); return; }
+    var goName = hit.getAttribute('data-go');
+    var tab = hit.getAttribute('data-tab');
+    var toast = hit.getAttribute('data-toast');
+    var filter = hit.getAttribute('data-filter');
+    var orgtab = hit.getAttribute('data-orgtab');
+    if (goName) go(goName, tab || null);
+    if (orgtab) setOrgTab(orgtab);
+    if (filter) applyAgentFilter(filter);
+    if (toast) showToast(toast);
+  });
+
+  go('home', null);
+})();
+</script>
+</body>
+</html>

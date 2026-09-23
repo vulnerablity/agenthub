@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import Icon from '@/components/Icon'
 import { executionDetailPath } from '@/constants/routes'
 import { useAgents } from '@/hooks/useAgents'
 import { useExecutions } from '@/hooks/useExecutions'
@@ -12,12 +13,10 @@ import { formatDuration } from '@/pages/executions/utils'
 
 const PAGE_SIZE = 20
 
-const STATUS_BADGES: Record<ExecutionStatus, { label: string; className: string }> = {
-  success: { label: '成功', className: 'bg-emerald-50 text-emerald-700' },
-  error: { label: '失败', className: 'bg-red-50 text-red-600' },
+const STATUS_BADGES: Record<ExecutionStatus, { label: string; badge: string }> = {
+  success: { label: '成功', badge: 'ok' },
+  error: { label: '失败', badge: 'err' },
 }
-
-
 
 function formatTokens(n: number): string {
   return n.toLocaleString('zh-CN')
@@ -43,7 +42,7 @@ export default function ExecutionList() {
   const { data, isPending, isFetching } = useExecutions(orgId, params)
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   const items = data?.items ?? []
@@ -53,11 +52,11 @@ export default function ExecutionList() {
   const handleFilterChange = () => setPage(0)
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="page-head">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">执行监控</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <h1 className="page-title">执行监控</h1>
+          <p className="page-sub">
             {org ? `${org.name} · Agent 执行链路（LLM / RAG / Tool / Token）` : '加载中…'}
           </p>
         </div>
@@ -70,7 +69,7 @@ export default function ExecutionList() {
             setAgentFilter(e.target.value)
             handleFilterChange()
           }}
-          className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-indigo-500"
+          className="select"
         >
           <option value="">全部 Agent</option>
           {(agents ?? []).map((agent) => (
@@ -85,29 +84,33 @@ export default function ExecutionList() {
             setStatusFilter(e.target.value as '' | ExecutionStatus)
             handleFilterChange()
           }}
-          className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-700 outline-none transition focus:border-indigo-500"
+          className="select"
         >
           <option value="">全部状态</option>
           <option value="success">成功</option>
           <option value="error">失败</option>
         </select>
-        {isFetching ? <span className="text-xs text-neutral-400">刷新中…</span> : null}
+        {isFetching ? (
+          <span className="text-[12px] muted">
+            <Icon name="loader" width={12} height={12} style={{ verticalAlign: '-1px' }} /> 刷新中…
+          </span>
+        ) : null}
       </div>
 
       {isPending ? (
-        <p className="mt-6 text-sm text-neutral-500">加载中…</p>
+        <p className="mt-6 muted">加载中…</p>
       ) : items.length > 0 ? (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-neutral-100 bg-neutral-50 text-xs text-neutral-500">
+        <div className="table-wrap mt-4">
+          <table className="tbl">
+            <thead>
               <tr>
-                <th className="px-4 py-3 font-medium">开始时间</th>
-                <th className="px-4 py-3 font-medium">Agent</th>
-                <th className="px-4 py-3 font-medium">步骤</th>
-                <th className="px-4 py-3 font-medium">Token</th>
-                <th className="px-4 py-3 font-medium">LLM 耗时</th>
-                <th className="px-4 py-3 font-medium">总耗时</th>
-                <th className="px-4 py-3 font-medium">状态</th>
+                <th>开始时间</th>
+                <th>Agent</th>
+                <th>步骤</th>
+                <th>Token</th>
+                <th>LLM 耗时</th>
+                <th>总耗时</th>
+                <th>状态</th>
               </tr>
             </thead>
             <tbody>
@@ -117,37 +120,25 @@ export default function ExecutionList() {
                   <tr
                     key={item.execution_id}
                     onClick={() => navigate(executionDetailPath(orgId, item.execution_id))}
-                    className="cursor-pointer border-b border-neutral-50 transition last:border-0 hover:bg-indigo-50/40"
+                    className="cursor-pointer transition hover:bg-[var(--accent-soft)]"
                   >
-                    <td className="px-4 py-3 text-neutral-700">
+                    <td className="muted">
                       {new Date(item.started_at).toLocaleString('zh-CN')}
                     </td>
-                    <td className="px-4 py-3 text-neutral-900">
-                      {item.agent_name ?? `Agent #${item.agent_id}`}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500">
-                      {item.step_count}
+                    <td className="strong">{item.agent_name ?? `Agent #${item.agent_id}`}</td>
+                    <td>
+                      <span className="mono">{item.step_count}</span>
                       {item.error_steps > 0 ? (
-                        <span className="ml-1 text-xs text-red-500">
+                        <span className="ml-1 text-[12px] text-red-500">
                           ({item.error_steps} 失败)
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-neutral-500">
-                      {formatTokens(item.total_tokens)}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500">
-                      {formatDuration(item.llm_latency_ms)}
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500">
-                      {formatDuration(item.duration_ms)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}
-                      >
-                        {badge.label}
-                      </span>
+                    <td className="mono muted">{formatTokens(item.total_tokens)}</td>
+                    <td className="mono muted">{formatDuration(item.llm_latency_ms)}</td>
+                    <td className="mono muted">{formatDuration(item.duration_ms)}</td>
+                    <td>
+                      <span className={`badge ${badge.badge}`}>{badge.label}</span>
                     </td>
                   </tr>
                 )
@@ -156,15 +147,14 @@ export default function ExecutionList() {
           </table>
         </div>
       ) : (
-        <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
-          <p className="text-sm text-neutral-500">
-            暂无执行记录，去「AI 对话」发起一次对话后将自动记录执行链路
-          </p>
+        <div className="empty mt-6">
+          <Icon name="activity" className="ic" />
+          <p>暂无执行记录，去「AI 对话」发起一次对话后将自动记录执行链路</p>
         </div>
       )}
 
       {total > PAGE_SIZE ? (
-        <div className="mt-4 flex items-center justify-between text-sm text-neutral-500">
+        <div className="pager mt-4">
           <span>
             共 {formatTokens(total)} 次执行 · 第 {page + 1} / {totalPages} 页
           </span>
@@ -173,7 +163,7 @@ export default function ExecutionList() {
               type="button"
               disabled={page === 0}
               onClick={() => setPage((p) => p - 1)}
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn ghost sm"
             >
               上一页
             </button>
@@ -181,7 +171,7 @@ export default function ExecutionList() {
               type="button"
               disabled={page >= totalPages - 1}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn ghost sm"
             >
               下一页
             </button>

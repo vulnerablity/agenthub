@@ -9,6 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { agentApi } from '@/api'
+import Icon from '@/components/Icon'
 import TextField from '@/components/form/TextField'
 import { AGENT_STATUS_LABELS, PROVIDER_OPTIONS, canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
@@ -123,7 +124,9 @@ export default function AgentForm() {
 
   const submitMutation = useMutation({
     mutationFn: (values: AgentForm) =>
-      isEdit ? agentApi.update(agentId!, buildUpdatePayload(values)) : agentApi.create(buildCreatePayload(values)),
+      isEdit
+        ? agentApi.update(agentId!, buildUpdatePayload(values))
+        : agentApi.create(buildCreatePayload(values)),
     onSuccess: async ({ data }) => {
       await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'agents'] })
       if (isEdit) {
@@ -135,16 +138,16 @@ export default function AgentForm() {
   })
 
   if (orgId == null || Number.isNaN(orgId)) {
-    return <p className="text-sm text-neutral-500">组织参数无效</p>
+    return <p className="muted">组织参数无效</p>
   }
 
   // 组织数据未到达前先展示加载态，避免管理员误见「无权限」提示
   if (org == null) {
-    return <p className="text-sm text-neutral-500">加载中…</p>
+    return <p className="muted">加载中…</p>
   }
 
   if (!canManage) {
-    return <p className="text-sm text-neutral-500">没有权限管理智能体</p>
+    return <p className="muted">没有权限管理智能体</p>
   }
 
   // 编辑态数据未就绪时禁用提交，避免空表单覆盖
@@ -167,174 +170,167 @@ export default function AgentForm() {
     submitMutation.mutate(values)
   })
 
-  const basicSection = (
-    <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-      <h3 className="text-base font-semibold text-neutral-900">基础信息</h3>
-      <div className="mt-4 space-y-4">
-        <TextField
-          label="名称"
-          placeholder="例如：客服助手"
-          error={errors.name?.message}
-          {...register('name')}
-        />
-        <TextField
-          label="描述"
-          placeholder="一句话说明智能体的用途（可选）"
-          error={errors.description?.message}
-          {...register('description')}
-        />
-        <TextField
-          label="头像地址"
-          placeholder="https://…（可选，留空使用首字母头像）"
-          error={errors.avatarUrl?.message}
-          {...register('avatarUrl')}
-        />
-        {!isEdit ? (
-          <div className="flex flex-col gap-2">
-            <label htmlFor="agent-status" className="text-sm font-medium text-neutral-700">
-              状态
-            </label>
-            <select
-              id="agent-status"
-              {...register('status')}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            >
-              <option value="enabled">{AGENT_STATUS_LABELS.enabled}</option>
-              <option value="disabled">{AGENT_STATUS_LABELS.disabled}</option>
-            </select>
-          </div>
-        ) : null}
-      </div>
-    </section>
-  )
-
-  const configSection = (
-    <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-      <h3 className="text-base font-semibold text-neutral-900">模型配置（初始版本 v1）</h3>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <TextField
-            label="LLM Provider"
-            placeholder="例如：openai"
-            list="provider-options"
-            error={errors.provider?.message}
-            {...register('provider')}
-          />
-          <datalist id="provider-options">
-            {PROVIDER_OPTIONS.map((p) => (
-              <option key={p} value={p} />
-            ))}
-          </datalist>
-        </div>
-        <TextField
-          label="模型"
-          placeholder="例如：gpt-4o-mini"
-          error={errors.modelName?.message}
-          {...register('modelName')}
-        />
-      </div>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="agent-temperature" className="text-sm font-medium text-neutral-700">
-            Temperature
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              id="agent-temperature"
-              type="range"
-              min={0}
-              max={2}
-              step={0.1}
-              value={preview.temperature === '' ? '0' : preview.temperature}
-              onChange={(e) => setValue('temperature', Number(e.target.value).toString())}
-              className="flex-1 accent-indigo-600"
-            />
-            <span className="w-12 shrink-0 text-right font-mono text-sm text-neutral-700">
-              {preview.temperature === '' ? '默认' : Number(preview.temperature).toFixed(1)}
-            </span>
-          </div>
-          <p className="text-xs text-neutral-400">留空使用运行时默认（0–2）</p>
-          {errors.temperature ? (
-            <p className="text-xs text-red-500">{errors.temperature.message}</p>
-          ) : null}
-        </div>
-        <TextField
-          label="Max Tokens"
-          type="number"
-          placeholder="留空使用运行时默认"
-          error={errors.maxTokens?.message}
-          {...register('maxTokens')}
-        />
-      </div>
-    </section>
-  )
-
-  const promptSection = (
-    <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-      <h3 className="text-base font-semibold text-neutral-900">系统提示词</h3>
-      <div className="mt-4 flex flex-col gap-2">
-        <label htmlFor="agent-system-prompt" className="text-sm font-medium text-neutral-700">
-          System Prompt
-        </label>
-        <textarea
-          id="agent-system-prompt"
-          rows={10}
-          placeholder="定义智能体的角色、行为与回答风格…"
-          className={`w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:ring-2 ${
-            errors.systemPrompt
-              ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-              : 'border-neutral-300 focus:border-indigo-500 focus:ring-indigo-100'
-          }`}
-          {...register('systemPrompt')}
-        />
-        {errors.systemPrompt ? (
-          <p className="text-xs text-red-500">{errors.systemPrompt.message}</p>
-        ) : null}
-      </div>
-    </section>
-  )
+  const sectionCls = 'card card-pad'
+  const sectionTitleCls = 'card-title'
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <div>
-        <h2 className="text-xl font-semibold text-neutral-900">
-          {isEdit ? '编辑智能体' : '新建智能体'}
-        </h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          {org.name}
-          {isEdit && agent ? ` · ${agent.name}` : ''}
-        </p>
+    <div className="mx-auto max-w-5xl">
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">{isEdit ? '编辑智能体' : '新建智能体'}</h1>
+          <p className="page-sub">
+            {org.name}
+            {isEdit && agent ? ` · ${agent.name}` : ''}
+          </p>
+        </div>
       </div>
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <form
-          id="agent-form"
-          onSubmit={onSubmit}
-          noValidate
-          className="space-y-6 lg:col-span-2"
-        >
-          {basicSection}
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <form id="agent-form" onSubmit={onSubmit} noValidate className="flex flex-col gap-5 lg:col-span-2">
+          <section className={sectionCls}>
+            <h3 className={sectionTitleCls}>
+              <Icon name="bot" className="ic" />
+              基础信息
+            </h3>
+            <div className="mt-4 flex flex-col gap-4">
+              <TextField
+                label="名称"
+                placeholder="例如：客服助手"
+                error={errors.name?.message}
+                {...register('name')}
+              />
+              <TextField
+                label="描述"
+                placeholder="一句话说明智能体的用途（可选）"
+                error={errors.description?.message}
+                {...register('description')}
+              />
+              <TextField
+                label="头像地址"
+                placeholder="https://…（可选，留空使用首字母头像）"
+                error={errors.avatarUrl?.message}
+                {...register('avatarUrl')}
+              />
+              {!isEdit ? (
+                <div className="field">
+                  <label htmlFor="agent-status" className="lbl">
+                    状态
+                  </label>
+                  <select id="agent-status" className="select w-full" {...register('status')}>
+                    <option value="enabled">{AGENT_STATUS_LABELS.enabled}</option>
+                    <option value="disabled">{AGENT_STATUS_LABELS.disabled}</option>
+                  </select>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
           {!isEdit ? (
             <>
-              {configSection}
-              {promptSection}
+              <section className={sectionCls}>
+                <h3 className={sectionTitleCls}>
+                  <Icon name="cpu" className="ic" />
+                  模型配置（初始版本 v1）
+                </h3>
+                <div className="mt-4 grid g2">
+                  <div>
+                    <TextField
+                      label="LLM Provider"
+                      placeholder="例如：openai"
+                      list="provider-options"
+                      error={errors.provider?.message}
+                      {...register('provider')}
+                    />
+                    <datalist id="provider-options">
+                      {PROVIDER_OPTIONS.map((p) => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <TextField
+                    label="模型"
+                    placeholder="例如：gpt-4o-mini"
+                    error={errors.modelName?.message}
+                    {...register('modelName')}
+                  />
+                </div>
+                <div className="mt-4 grid g2">
+                  <div className="field">
+                    <label htmlFor="agent-temperature" className="lbl">
+                      Temperature
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="agent-temperature"
+                        type="range"
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        value={preview.temperature === '' ? '0' : preview.temperature}
+                        onChange={(e) => setValue('temperature', Number(e.target.value).toString())}
+                        className="flex-1 accent-[#5b5bd6]"
+                      />
+                      <span className="w-12 shrink-0 text-right mono text-[13px]">
+                        {preview.temperature === '' ? '默认' : Number(preview.temperature).toFixed(1)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] muted">留空使用运行时默认（0–2）</p>
+                    {errors.temperature ? (
+                      <p className="err-text">{errors.temperature.message}</p>
+                    ) : null}
+                  </div>
+                  <TextField
+                    label="Max Tokens"
+                    type="number"
+                    placeholder="留空使用运行时默认"
+                    error={errors.maxTokens?.message}
+                    {...register('maxTokens')}
+                  />
+                </div>
+              </section>
+
+              <section className={sectionCls}>
+                <h3 className={sectionTitleCls}>
+                  <Icon name="file-text" className="ic" />
+                  系统提示词
+                </h3>
+                <div className="field mt-4">
+                  <label htmlFor="agent-system-prompt" className="lbl">
+                    System Prompt
+                  </label>
+                  <textarea
+                    id="agent-system-prompt"
+                    rows={10}
+                    placeholder="定义智能体的角色、行为与回答风格…"
+                    className={`w-full resize-y rounded-[10px] border px-3.5 py-2.5 mono leading-relaxed outline-none transition placeholder:text-[#b3b9ce] ${
+                      errors.systemPrompt
+                        ? 'border-[#f5c6c6] focus:border-[#dc2626] focus:ring-2 focus:ring-[#fdecec]'
+                        : 'border-[var(--line-2)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[#e4e6ff]'
+                    }`}
+                    {...register('systemPrompt')}
+                  />
+                  {errors.systemPrompt ? (
+                    <p className="err-text">{errors.systemPrompt.message}</p>
+                  ) : null}
+                </div>
+              </section>
             </>
           ) : null}
 
-          <div className="flex items-center gap-3">
+          <div className="row-actions">
             <button
               type="button"
               onClick={() => navigate(cancelTo)}
-              className="rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-700 transition hover:bg-neutral-100"
+              className="btn ghost"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={submitMutation.isPending || !formReady}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn primary"
             >
               {submitMutation.isPending ? '保存中…' : '保存'}
             </button>
@@ -342,59 +338,50 @@ export default function AgentForm() {
         </form>
 
         {!isEdit ? (
-          <aside className="self-start lg:sticky lg:top-8">
-            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 shadow-sm">
-              <h3 className="text-xs font-medium text-neutral-400">实时预览</h3>
-              <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-semibold text-neutral-900">
-                    {preview.name || '未命名智能体'}
-                  </p>
-                  <span
-                    className={`shrink-0 rounded-full px-3 py-0.5 text-xs font-medium ${
-                      preview.status === 'enabled'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-neutral-100 text-neutral-500'
-                    }`}
-                  >
+          <aside className="self-start lg:sticky lg:top-6">
+            <div
+              className="card card-pad"
+              style={{ background: 'linear-gradient(160deg, #f3f0ff, #f7f8ff)', borderColor: '#e0dcff' }}
+            >
+              <h3 className="text-[12px] font-semibold uppercase tracking-wide muted">实时预览</h3>
+              <div className="card card-pad mt-3" style={{ padding: '16px' }}>
+                <div className="flex-between">
+                  <p className="truncate text-[14px] font-bold">{preview.name || '未命名智能体'}</p>
+                  <span className={`badge ${preview.status === 'enabled' ? 'ok' : 'off'}`}>
                     {AGENT_STATUS_LABELS[preview.status ?? 'enabled']}
                   </span>
                 </div>
-                <p className="mt-2 line-clamp-2 min-h-8 text-xs text-neutral-500">
+                <p className="mt-2 line-clamp-2 min-h-8 text-[12.5px] muted">
                   {preview.description || '暂无描述'}
                 </p>
                 {preview.provider || preview.modelName ? (
-                  <p className="mt-3 text-xs text-neutral-400">
-                    <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
-                      {preview.provider || 'provider'}
-                    </span>
-                    <span className="mx-1.5">/</span>
-                    <span className="rounded bg-neutral-100 px-2 py-0.5 font-mono">
-                      {preview.modelName || 'model'}
-                    </span>
+                  <p className="mt-3">
+                    <span className="tag">{preview.provider || 'provider'}</span>
+                    <span className="mx-1.5 muted">/</span>
+                    <span className="tag">{preview.modelName || 'model'}</span>
                   </p>
                 ) : null}
-                <dl className="mt-3 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
-                  <div className="flex justify-between">
+                <dl className="kv mt-3">
+                  <div className="row flex justify-between">
                     <dt>温度</dt>
-                    <dd className="font-mono">
+                    <dd className="mono">
                       {preview.temperature === '' ? '默认' : Number(preview.temperature).toFixed(1)}
                     </dd>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="row flex justify-between">
                     <dt>Max Tokens</dt>
-                    <dd className="font-mono">{preview.maxTokens || '默认'}</dd>
+                    <dd className="mono">{preview.maxTokens || '默认'}</dd>
                   </div>
                 </dl>
               </div>
-              <p className="mt-3 text-xs text-neutral-400">
+              <p className="mt-3 text-[12px] muted">
                 提示词 {(preview.systemPrompt ?? '').length} 字符
               </p>
               <button
                 type="submit"
                 form="agent-form"
                 disabled={submitMutation.isPending || !formReady}
-                className="mt-4 hidden w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 lg:block"
+                className="btn primary mt-3 hidden w-full lg:block"
               >
                 {submitMutation.isPending ? '保存中…' : '保存智能体'}
               </button>

@@ -39,14 +39,11 @@ export default function OrgSwitcher() {
   }
 
   if (isPending) {
-    return <p className="px-3 text-sm text-neutral-400">加载中…</p>
+    return <span className="sb-select muted">加载中…</span>
   }
   if (!organizations || organizations.length === 0) {
     return (
-      <Link
-        to={ROUTE_PATHS.ORGANIZATIONS}
-        className="block rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-500 transition hover:border-indigo-300 hover:text-indigo-600"
-      >
+      <Link to={ROUTE_PATHS.ORGANIZATIONS} className="sb-select-link">
         创建或加入组织
       </Link>
     )
@@ -56,7 +53,7 @@ export default function OrgSwitcher() {
     <select
       value={currentOrgId ?? undefined}
       onChange={(e) => handleChange(Number(e.target.value))}
-      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+      className="sb-select"
     >
       {organizations.map((org) => (
         <option key={org.id} value={org.id}>

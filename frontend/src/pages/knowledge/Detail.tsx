@@ -4,6 +4,7 @@
 import { useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
+import Icon from '@/components/Icon'
 import { canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import { knowledgeBaseEditPath, knowledgeBasesPath } from '@/constants/routes'
@@ -14,10 +15,10 @@ import { useOrg } from '@/hooks/useOrg'
 import type { DocumentStatus } from '@/types'
 
 const DOC_STATUS_META: Record<DocumentStatus, { label: string; cls: string }> = {
-  pending: { label: '待处理', cls: 'bg-neutral-100 text-neutral-500' },
-  processing: { label: '处理中', cls: 'bg-blue-50 text-blue-700' },
-  completed: { label: '已完成', cls: 'bg-emerald-50 text-emerald-700' },
-  failed: { label: '失败', cls: 'bg-red-50 text-red-600' },
+  pending: { label: '待处理', cls: 'badge off' },
+  processing: { label: '处理中', cls: 'badge proc' },
+  completed: { label: '已完成', cls: 'badge ok' },
+  failed: { label: '失败', cls: 'badge err' },
 }
 
 const TOP_K_OPTIONS = [1, 3, 5, 10]
@@ -51,15 +52,15 @@ export default function KnowledgeBaseDetail() {
   const [topK, setTopK] = useState(5)
 
   if (orgId == null || kbId == null || Number.isNaN(orgId) || Number.isNaN(kbId)) {
-    return <p className="text-sm text-neutral-500">参数无效</p>
+    return <p className="muted">参数无效</p>
   }
 
   if (isPending) {
-    return <p className="text-sm text-neutral-500">加载中…</p>
+    return <p className="muted">加载中…</p>
   }
 
   if (!kb) {
-    return <p className="text-sm text-neutral-500">知识库不存在</p>
+    return <p className="muted">知识库不存在</p>
   }
 
   const handleUpload = (file: File | undefined | null) => {
@@ -102,41 +103,49 @@ export default function KnowledgeBaseDetail() {
   const hasRunning = documents?.some((d) => d.status === 'pending' || d.status === 'processing')
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <button
-        type="button"
-        onClick={() => navigate(knowledgeBasesPath(orgId))}
-        className="text-sm text-neutral-500 transition hover:text-neutral-700"
-      >
-        ← 返回知识库列表
+    <div>
+      <button type="button" onClick={() => navigate(knowledgeBasesPath(orgId))} className="btn ghost xs">
+        <Icon name="back" className="ic" />
+        返回知识库列表
       </button>
 
       {/* KB 信息卡 */}
-      <div className="mt-4 flex items-start justify-between rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <div>
-          <h2 className="text-xl font-semibold text-neutral-900">{kb.name}</h2>
-          <p className="mt-1 text-sm text-neutral-500">{kb.description || '暂无描述'}</p>
-          <p className="mt-3 text-xs text-neutral-400">
-            {kb.embedding_model} · 片段 {kb.chunk_size}/{kb.chunk_overlap} · {kb.document_count} 个文档
-            {kb.processing_count > 0 ? `（${kb.processing_count} 处理中）` : ''}
-          </p>
+      <div className="card card-pad mt-4 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <span className="avatar lg av-3">
+            <Icon name="book" width={20} height={20} />
+          </span>
+          <div>
+            <div className="flex items-center gap-3">
+              <h2 className="page-title">{kb.name}</h2>
+              {kb.processing_count > 0 ? (
+                <span className="badge proc">{kb.processing_count} 处理中</span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-[13.5px] muted">{kb.description || '暂无描述'}</p>
+            <p className="mt-2 text-[12px] muted">
+              <span className="mono">{kb.embedding_model}</span> · 片段{' '}
+              <span className="mono">{kb.chunk_size}/{kb.chunk_overlap}</span> · {kb.document_count} 个文档
+            </p>
+          </div>
         </div>
         {canManage ? (
           <button
             type="button"
             onClick={() => navigate(knowledgeBaseEditPath(orgId, kb.id))}
-            className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 transition hover:bg-neutral-100"
+            className="btn ghost sm"
           >
+            <Icon name="edit" className="ic" />
             编辑
           </button>
         ) : null}
       </div>
 
-      {apiError ? <p className="mt-4 text-sm text-red-500">{apiError}</p> : null}
+      {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_400px]">
+      <div className="mt-5 grid gap-5" style={{ gridTemplateColumns: '1fr 400px' }}>
         {/* 左：文档区 */}
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           {canManage ? (
             <div
               onDragOver={(e) => {
@@ -149,8 +158,8 @@ export default function KnowledgeBaseDetail() {
                 setDragging(false)
                 handleUpload(e.dataTransfer.files?.[0])
               }}
-              className={`rounded-2xl border-2 border-dashed p-6 text-center transition ${
-                dragging ? 'border-indigo-400 bg-indigo-50' : 'border-neutral-300 bg-white'
+              className={`rounded-[14px] border-2 border-dashed p-6 text-center transition ${
+                dragging ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--line-2)] bg-white'
               }`}
             >
               <input
@@ -160,23 +169,27 @@ export default function KnowledgeBaseDetail() {
                 className="hidden"
                 onChange={(e) => handleUpload(e.target.files?.[0])}
               />
-              <p className="text-sm text-neutral-600">
+              <Icon name="upload" width={26} height={26} style={{ color: '#c3c8de', margin: '0 auto' }} />
+              <p className="mt-2 text-[13.5px] text-[var(--ink-2)]">
                 拖拽文件到此处，或
                 <button
                   type="button"
                   disabled={uploading}
                   onClick={() => fileInputRef.current?.click()}
-                  className="mx-1 font-medium text-indigo-600 transition hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mx-1 font-semibold text-[var(--accent-ink)] transition hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   点击选择
                 </button>
                 上传（仅 PDF / TXT / Markdown，≤ 20MB）
               </p>
               {uploading ? (
-                <div className="mx-auto mt-3 h-2 w-64 overflow-hidden rounded-full bg-neutral-200">
+                <div className="mx-auto mt-3 h-2 w-64 overflow-hidden rounded-full bg-[#eef0f8]">
                   <div
-                    className="h-full rounded-full bg-indigo-600 transition-all"
-                    style={{ width: `${uploadPercent ?? 0}%` }}
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${uploadPercent ?? 0}%`,
+                      background: 'var(--grad)',
+                    }}
                   />
                 </div>
               ) : null}
@@ -184,7 +197,10 @@ export default function KnowledgeBaseDetail() {
           ) : null}
 
           {hasRunning ? (
-            <p className="text-xs text-neutral-400">存在处理中的文档，状态将自动刷新…</p>
+            <p className="text-[12px] muted">
+              <Icon name="loader" width={12} height={12} style={{ verticalAlign: '-1px' }} />{' '}
+              存在处理中的文档，状态将自动刷新…
+            </p>
           ) : null}
 
           {documents && documents.length > 0 ? (
@@ -192,29 +208,27 @@ export default function KnowledgeBaseDetail() {
               {documents.map((doc) => {
                 const meta = DOC_STATUS_META[doc.status]
                 return (
-                  <li
-                    key={doc.id}
-                    className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm"
-                  >
+                  <li key={doc.id} className="card card-pad flex items-center gap-4" style={{ padding: '14px 16px' }}>
+                    <span className="avatar md av-6">
+                      <Icon name="file-text" width={16} height={16} />
+                    </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p
-                          className="truncate text-sm font-medium text-neutral-900"
+                          className="truncate text-[13.5px] font-semibold"
                           title={doc.status === 'failed' ? (doc.error_message ?? undefined) : undefined}
                         >
                           {doc.filename}
                         </p>
-                        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}>
-                          {meta.label}
-                        </span>
+                        <span className={meta.cls}>{meta.label}</span>
                       </div>
-                      <p className="mt-1 text-xs text-neutral-400">
+                      <p className="mt-1 text-[12px] muted">
                         {doc.file_type.toUpperCase()} · {formatBytes(doc.file_size)} ·{' '}
                         {doc.status === 'completed' ? `${doc.chunk_count} 个片段` : '—'} ·{' '}
                         {new Date(doc.created_at).toLocaleDateString('zh-CN')}
                       </p>
                       {doc.status === 'failed' && doc.error_message ? (
-                        <p className="mt-1 line-clamp-2 text-xs text-red-500">
+                        <p className="mt-1 line-clamp-2 text-[12px] text-red-500">
                           {doc.error_message}（修复后可删除重新上传）
                         </p>
                       ) : null}
@@ -227,7 +241,7 @@ export default function KnowledgeBaseDetail() {
                           deleteDocumentMutation.variables === doc.id
                         }
                         onClick={() => handleDeleteDocument(doc.id, doc.filename)}
-                        className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn xs danger-ghost shrink-0"
                       >
                         {deleteDocumentMutation.isPending &&
                         deleteDocumentMutation.variables === doc.id
@@ -240,38 +254,42 @@ export default function KnowledgeBaseDetail() {
               })}
             </ul>
           ) : (
-            <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
-              <p className="text-sm text-neutral-500">
-                {canManage ? '尚未上传文档，拖拽或点击上方区域上传' : '该知识库暂无文档'}
-              </p>
+            <div className="empty">
+              <Icon name="file-text" className="ic" />
+              <p>{canManage ? '尚未上传文档，拖拽或点击上方区域上传' : '该知识库暂无文档'}</p>
             </div>
           )}
         </div>
 
         {/* 右：检索测试面板 */}
-        <div className="h-fit rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h3 className="text-base font-semibold text-neutral-900">检索测试</h3>
-          <p className="mt-1 text-xs text-neutral-400">验证 RAG 检索效果（内容 / 文档 / 页码 / 分数）</p>
+        <div className="card card-pad h-fit" style={{ padding: '18px' }}>
+          <h3 className="card-title">
+            <Icon name="search" className="ic" />
+            检索测试
+          </h3>
+          <p className="card-sub mt-1">验证 RAG 检索效果（内容 / 文档 / 页码 / 分数）</p>
           <div className="mt-4 flex flex-col gap-3">
-            <input
-              type="text"
-              placeholder="输入测试问题，如：员工年假是多少"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSearch()
-              }}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-            />
+            <div className="input">
+              <Icon name="search" className="ic" />
+              <input
+                type="text"
+                placeholder="输入测试问题，如：员工年假是多少"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSearch()
+                }}
+              />
+            </div>
             <div className="flex items-center gap-3">
-              <label htmlFor="kb-topk" className="text-sm text-neutral-600">
+              <label htmlFor="kb-topk" className="text-[13px] text-[var(--ink-2)]">
                 返回条数
               </label>
               <select
                 id="kb-topk"
                 value={topK}
                 onChange={(e) => setTopK(Number(e.target.value))}
-                className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-900 outline-none focus:border-indigo-500"
+                className="select"
               >
                 {TOP_K_OPTIONS.map((value) => (
                   <option key={value} value={value}>
@@ -283,7 +301,7 @@ export default function KnowledgeBaseDetail() {
                 type="button"
                 disabled={search.isSearching || !query.trim()}
                 onClick={handleSearch}
-                className="ml-auto rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn primary sm ml-auto"
               >
                 {search.isSearching ? '检索中…' : '检索'}
               </button>
@@ -291,29 +309,27 @@ export default function KnowledgeBaseDetail() {
           </div>
 
           {search.searchError ? (
-            <p className="mt-4 text-xs text-red-500">{errorMessage(search.searchError)}</p>
+            <p className="mt-4 text-[12px] text-red-500">{errorMessage(search.searchError)}</p>
           ) : null}
 
           {search.result && search.result.results.length === 0 ? (
-            <p className="mt-4 text-sm text-neutral-500">未检索到相关内容</p>
+            <p className="mt-4 muted">未检索到相关内容</p>
           ) : null}
 
           {search.result && search.result.results.length > 0 ? (
             <ul className="mt-4 flex flex-col gap-3">
               {search.result.results.map((item, index) => (
-                <li key={index} className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+                <li key={index} className="rounded-[12px] border border-[var(--line)] bg-[var(--surface-2)] p-3">
                   <div className="flex items-center gap-2">
-                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-neutral-800">
+                    <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">
                       {item.document}
                     </p>
-                    <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                      {item.score.toFixed(2)}
-                    </span>
+                    <span className="badge accent">{item.score.toFixed(2)}</span>
                   </div>
                   {item.page != null ? (
-                    <p className="mt-1 text-xs text-neutral-400">第 {item.page} 页</p>
+                    <p className="mt-1 text-[12px] muted">第 {item.page} 页</p>
                   ) : null}
-                  <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-neutral-600">
+                  <p className="mt-1 line-clamp-4 text-[12px] leading-relaxed text-[var(--ink-2)]">
                     {item.content}
                   </p>
                 </li>
