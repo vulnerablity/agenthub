@@ -1,6 +1,6 @@
 // pages/Home.tsx
 // 登录后概览页（工作台）：问候 + 统计卡 + 最近执行 + 当前组织 + 快捷入口；无组织时引导创建
-import { useMemo } from 'react'
+import { useMemo ,useId} from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import Icon from '@/components/Icon'
@@ -26,7 +26,8 @@ import type { ExecutionStatus } from '@/types'
 
 /** 迷你趋势图（SVG 折线，复用设计稿 spark 风格） */
 function Spark({ values, color }: { values: number[]; color: string }) {
-  const id = useMemo(() => `spark-${Math.random().toString(36).slice(2, 8)}`, [])
+  const baseId = useId()
+  const id = useMemo(() => `spark-${baseId}`, [])
   if (values.length < 2) {
     return (
       <svg className="spark" viewBox="0 0 86 38" preserveAspectRatio="none" aria-hidden="true">
