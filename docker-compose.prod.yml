@@ -35,6 +35,18 @@ services:
       timeout: 5s
       retries: 10
 
+  qdrant:
+    image: qdrant/qdrant:v1.16.1
+    container_name: agenthub-qdrant
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - qdrant_data:/qdrant/storage
+
   backend:
     # CD 推送后自动替换为最新 dev 镜像
     image: ghcr.io/vulnerablity/agenthub/backend:dev
@@ -56,10 +68,30 @@ services:
       DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-agenthub}:${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-agenthub}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      # LLM 网关（OpenAI 兼容协议，chat 模块）；生产必填，否则 LLM 对话与 RAG 不可用
+      LLM_API_BASE: ${LLM_API_BASE:?请在 .env 中设置 LLM_API_BASE}
+      LLM_API_KEY: ${LLM_API_KEY:?请在 .env 中设置 LLM_API_KEY}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
+      # 向量库与 Embedding（知识库模块）；qdrant 服务名即同文件 qdrant 容器
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      # 上传文档持久化：宿主机 ./storage 映射容器 /app/storage（容器重建不丢文件）
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/storage/uploads}
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-20}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      DOCUMENT_PROCESSING_TIMEOUT: ${DOCUMENT_PROCESSING_TIMEOUT:-300}
+    volumes:
+      - ./storage:/app/storage
     depends_on:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
 
   frontend:
@@ -74,3 +106,4 @@ services:
 
 volumes:
   mysql_data:
+  qdrant_data:
