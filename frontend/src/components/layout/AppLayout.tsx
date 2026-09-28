@@ -70,7 +70,7 @@ export default function AppLayout() {
         </div>
 
         <div className="sb-org">
-          <div className="lbl">当前组织</div>
+          {/* <div className="lbl">当前组织</div> */}
           <div className="row">
             <Icon name="building" className="ic" />
             <OrgSwitcher />
