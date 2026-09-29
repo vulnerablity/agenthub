@@ -113,9 +113,7 @@ async def test_create_name_conflict_and_required_key(client, monkeypatch):
     dup = await _create_provider(client, token, org["id"])
     assert dup.status_code == 409
     assert dup.json()["code"] == "MODEL_PROVIDER_NAME_CONFLICT"
-    no_key = await _create_provider(
-        client, token, org["id"], name="DS3", api_key=""
-    )
+    no_key = await _create_provider(client, token, org["id"], name="DS3", api_key="")
     assert no_key.status_code == 422
     assert no_key.json()["code"] == "MODEL_PROVIDER_FIELD_REQUIRED"
     # 免密类型（ollama）允许无 key
@@ -201,12 +199,14 @@ async def test_delete_cascades_models(client, engine):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
         left = (
-            await session.execute(
-                select(ProviderModel).where(
-                    ProviderModel.provider_id == body["id"]
+            (
+                await session.execute(
+                    select(ProviderModel).where(ProviderModel.provider_id == body["id"])
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert left == []
 
 
@@ -217,9 +217,7 @@ async def test_delete_cascades_models(client, engine):
 async def test_cross_org_is_404_and_member_write_403(client):
     token = await _token(client, await _register(client, "p6@a.com", "p6"))
     org_a = await _create_org(client, token, "A")
-    provider = (
-        await _create_provider(client, token, org_a["id"], name="A供应")
-    ).json()
+    provider = (await _create_provider(client, token, org_a["id"], name="A供应")).json()
     # 另一用户/组织不可见、不可删
     token_b = await _token(client, await _register(client, "p7@a.com", "p7"))
     org_b = await _create_org(client, token_b, "B")
@@ -284,9 +282,7 @@ async def test_version_binding_rules(client):
     """D12：禁用模型 422 / 未登记模型放行 / 跨组织供应商 404 / 快照与 provider_id 落库"""
     token = await _token(client, await _register(client, "p8@a.com", "p8"))
     org = await _create_org(client, token)
-    provider = (
-        await _create_provider(client, token, org["id"], name="D12供应")
-    ).json()
+    provider = (await _create_provider(client, token, org["id"], name="D12供应")).json()
     # hdr = _hdr(token, org["id"])
 
     # 禁用模型 → 422
@@ -339,12 +335,8 @@ async def test_version_binding_rules(client):
 async def test_delete_referenced_provider_409(client):
     token = await _token(client, await _register(client, "pa@a.com", "pa"))
     org = await _create_org(client, token)
-    provider = (
-        await _create_provider(client, token, org["id"], name="被引用")
-    ).json()
-    agent = await _create_agent(
-        client, token, org["id"], provider_id=provider["id"]
-    )
+    provider = (await _create_provider(client, token, org["id"], name="被引用")).json()
+    agent = await _create_agent(client, token, org["id"], provider_id=provider["id"])
     assert agent.status_code == 201
     resp = await client.delete(
         f"/api/v1/model-providers/{provider['id']}", headers=_hdr(token, org["id"])
@@ -416,8 +408,7 @@ class _FakeAsyncClient:
     status_code = 200
 
     def __init__(self, **kwargs):
-        self.calls=[]
-        
+        self.calls = []
 
     async def __aenter__(self):
         return self
@@ -453,36 +444,53 @@ async def test_test_connection_modes_and_errors(client, monkeypatch):
 
     # 模式一：无 model_key → GET /models
     _FakeAsyncClient.calls = []
-    resp = (await _post({"base_url": "https://api.deepseek.com/v1",
-                         "api_key": "sk-x-12345678"}, 200)).json()
+    resp = (
+        await _post(
+            {"base_url": "https://api.deepseek.com/v1", "api_key": "sk-x-12345678"}, 200
+        )
+    ).json()
     assert resp["ok"] is True
     assert _FakeAsyncClient.calls[0][1] == "https://api.deepseek.com/v1/models"
 
     # 模式二：有 model_key → POST chat/completions，max_tokens=1
     _FakeAsyncClient.calls = []
-    resp = (await _post({"base_url": "https://api.deepseek.com/v1",
-                         "api_key": "sk-x-12345678",
-                         "model_key": "deepseek-chat",
-                         "provider_type": "deepseek"}, 200)).json()
+    resp = (
+        await _post(
+            {
+                "base_url": "https://api.deepseek.com/v1",
+                "api_key": "sk-x-12345678",
+                "model_key": "deepseek-chat",
+                "provider_type": "deepseek",
+            },
+            200,
+        )
+    ).json()
     assert resp["ok"] is True
     call = _FakeAsyncClient.calls[0]
     assert call[1].endswith("/chat/completions")
     assert call[2]["max_tokens"] == 1
 
     # 401 → auth；404（带模型）→ model_not_found；500 → unknown；网络异常 → network
-    assert (await _post({"base_url": "https://1.2.3.4/v1",
-                         "api_key": "sk-x-12345678"}, 401)).json()["error_type"] == "auth"
-    body_404 = (await _post({"base_url": "https://1.2.3.4/v1",
-                             "api_key": "sk-x-12345678",
-                             "model_key": "nope",
-                             "provider_type": "deepseek"}, 404)).json()
+    assert (
+        await _post({"base_url": "https://1.2.3.4/v1", "api_key": "sk-x-12345678"}, 401)
+    ).json()["error_type"] == "auth"
+    body_404 = (
+        await _post(
+            {
+                "base_url": "https://1.2.3.4/v1",
+                "api_key": "sk-x-12345678",
+                "model_key": "nope",
+                "provider_type": "deepseek",
+            },
+            404,
+        )
+    ).json()
     assert body_404["error_type"] == "model_not_found"
-    assert (await _post({"base_url": "https://1.2.3.4/v1",
-                         "api_key": "sk-x-12345678"}, 500)).json()["error_type"] == "unknown"
+    assert (
+        await _post({"base_url": "https://1.2.3.4/v1", "api_key": "sk-x-12345678"}, 500)
+    ).json()["error_type"] == "unknown"
 
-    monkeypatch.setattr(
-        ps_module.httpx, "AsyncClient", _RaisingClient
-    )
+    monkeypatch.setattr(ps_module.httpx, "AsyncClient", _RaisingClient)
     net = await client.post(
         "/api/v1/model-providers/test-connection",
         json={"base_url": "https://1.2.3.4/v1", "api_key": "sk-x-12345678"},

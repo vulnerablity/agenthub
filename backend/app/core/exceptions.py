@@ -360,6 +360,6 @@ class EncryptionKeyMissing(AppError):
             500,
             "ENCRYPTION_KEY_MISSING",
             "ENCRYPTION_KEY 未配置，无法处理供应商密钥"
-            "（生成：python -c \"from cryptography.fernet import Fernet; "
-            "print(Fernet.generate_key().decode())\"）",
+            '（生成：python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"）',
         )

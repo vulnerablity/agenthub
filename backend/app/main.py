@@ -21,8 +21,8 @@ async def lifespan(_: FastAPI):
     if not settings.ENCRYPTION_KEY:
         logger.warning(
             "ENCRYPTION_KEY 未配置：模型供应商 api_key 功能不可用"
-            "（生成：python -c \"from cryptography.fernet import Fernet; "
-            "print(Fernet.generate_key().decode())\"）"
+            '（生成：python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"）'
         )
     # 启动：恢复中断的文档任务并拉起消费循环（knowledge.md 3.4 重启恢复）
     await get_worker().start()

@@ -139,12 +139,16 @@ class ProviderService:
         """删除供应商（D7 事务内双重防护）：引用计数预检 → 删除捕获 FK RESTRICT IntegrityError"""
         provider = await self._get_in_org(org, provider_id)
         ref_count = (
-            await self.db.execute(
-                select(AgentVersion.id).where(
-                    AgentVersion.provider_id == provider.id
+            (
+                await self.db.execute(
+                    select(AgentVersion.id).where(
+                        AgentVersion.provider_id == provider.id
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if ref_count is not None:
             raise ModelProviderInUse()
         try:
@@ -227,9 +231,11 @@ class ProviderService:
             return TestConnectionResponse(
                 ok=False, latency_ms=0, error_type="forbidden", message=exc.message
             )
-        if data.model_key and data.provider_type in REQUIRES_API_KEY and not (
-            data.api_key or ""
-        ).strip():
+        if (
+            data.model_key
+            and data.provider_type in REQUIRES_API_KEY
+            and not (data.api_key or "").strip()
+        ):
             raise ModelProviderFieldRequired("API Key")
         headers = {"Content-Type": "application/json"}
         if (data.api_key or "").strip():
@@ -298,12 +304,11 @@ class ProviderService:
             ok=False,
             latency_ms=latency_ms,
             error_type="unknown",
-            message="供应商返回异常状态" + ("（地址或路径不正确）" if status_code == 404 else ""),
+            message="供应商返回异常状态"
+            + ("（地址或路径不正确）" if status_code == 404 else ""),
         )
 
-    async def _get_in_org(
-        self, org: Organization, provider_id: int
-    ) -> ModelProvider:
+    async def _get_in_org(self, org: Organization, provider_id: int) -> ModelProvider:
         """归属校验：不存在或不属于当前组织一律 404（不泄露跨组织存在性，KB 同模式）"""
         provider = await self.db.get(ModelProvider, provider_id)
         if provider is None or provider.organization_id != org.id:

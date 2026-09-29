@@ -1,4 +1,5 @@
 """Organization avatar normalization and local storage."""
+
 from __future__ import annotations
 
 import hashlib
