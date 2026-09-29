@@ -18,6 +18,8 @@ import Settings from '@/pages/organizations/Settings'
 import KnowledgeBaseList from '@/pages/knowledge/List'
 import KnowledgeBaseForm from '@/pages/knowledge/Form'
 import KnowledgeBaseDetail from '@/pages/knowledge/Detail'
+import ModelProviderList from '@/pages/model-providers/List'
+import ModelProviderForm from '@/pages/model-providers/Form'
 import ToolList from '@/pages/tools/List'
 import ToolForm from '@/pages/tools/Form'
 import ToolDetail from '@/pages/tools/Detail'
@@ -51,6 +53,10 @@ export const router = createBrowserRouter([
           { path: ROUTE_PATHS.KNOWLEDGE_BASE_NEW, element: <KnowledgeBaseForm /> },
           { path: ROUTE_PATHS.KNOWLEDGE_BASE_DETAIL, element: <KnowledgeBaseDetail /> },
           { path: ROUTE_PATHS.KNOWLEDGE_BASE_EDIT, element: <KnowledgeBaseForm /> },
+          { path: ROUTE_PATHS.MODEL_PROVIDERS, element: <ModelProviderList /> },
+          // /model-providers/new 必须声明在 /model-providers/:providerId 之前（保持既有路由顺序约束）
+          { path: ROUTE_PATHS.MODEL_PROVIDER_NEW, element: <ModelProviderForm /> },
+          { path: ROUTE_PATHS.MODEL_PROVIDER_EDIT, element: <ModelProviderForm /> },
           { path: ROUTE_PATHS.TOOLS, element: <ToolList /> },
           // /tools/new 必须声明在 /tools/:toolId 之前（保持既有路由顺序约束）
           { path: ROUTE_PATHS.TOOL_NEW, element: <ToolForm /> },

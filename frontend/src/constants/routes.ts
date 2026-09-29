@@ -18,6 +18,9 @@ export const ROUTE_PATHS = {
   KNOWLEDGE_BASE_NEW: '/organizations/:orgId/knowledge-bases/new',
   KNOWLEDGE_BASE_DETAIL: '/organizations/:orgId/knowledge-bases/:kbId',
   KNOWLEDGE_BASE_EDIT: '/organizations/:orgId/knowledge-bases/:kbId/edit',
+  MODEL_PROVIDERS: '/organizations/:orgId/model-providers',
+  MODEL_PROVIDER_NEW: '/organizations/:orgId/model-providers/new',
+  MODEL_PROVIDER_EDIT: '/organizations/:orgId/model-providers/:providerId/edit',
   TOOLS: '/organizations/:orgId/tools',
   TOOL_NEW: '/organizations/:orgId/tools/new',
   TOOL_DETAIL: '/organizations/:orgId/tools/:toolId',
@@ -101,6 +104,24 @@ export function knowledgeBaseEditPath(
   kbId: number | string,
 ): string {
   return `/organizations/${orgId}/knowledge-bases/${kbId}/edit`
+}
+
+/** 生成带组织 id 的模型供应商列表路径 */
+export function modelProvidersPath(orgId: number | string): string {
+  return `/organizations/${orgId}/model-providers`
+}
+
+/** 生成带组织 id 的新建模型供应商路径 */
+export function modelProviderNewPath(orgId: number | string): string {
+  return `/organizations/${orgId}/model-providers/new`
+}
+
+/** 生成带组织与供应商 id 的编辑路径 */
+export function modelProviderEditPath(
+  orgId: number | string,
+  providerId: number | string,
+): string {
+  return `/organizations/${orgId}/model-providers/${providerId}/edit`
 }
 
 /** 生成带组织 id 的工具列表路径 */

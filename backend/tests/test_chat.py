@@ -69,7 +69,16 @@ def _fake_chat(deltas, usage=None, error_after=None, blocker=None, captured=None
     """构造假 LLM 流：按序产出 delta；可选阻塞（并发测试）/ 流中抛错 / 捕获上下文参数（含 tools）"""
 
     async def chat_stream(
-        self, *, messages, model, temperature=None, max_tokens=None, tools=None
+        self,
+        *,
+        messages,
+        model,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        base_url=None,
+        api_key=None,
+        stream_usage=True,
     ):
         if captured is not None:
             captured.append({"messages": messages, "model": model, "tools": tools})
@@ -94,7 +103,16 @@ def _fake_tool_loop(rounds):
     queue = list(rounds)
 
     async def chat_stream(
-        self, *, messages, model, temperature=None, max_tokens=None, tools=None
+        self,
+        *,
+        messages,
+        model,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        base_url=None,
+        api_key=None,
+        stream_usage=True,
     ):
         spec = queue.pop(0)
         for delta in spec.get("deltas", []):

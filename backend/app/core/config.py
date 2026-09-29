@@ -4,6 +4,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from cryptography.fernet import Fernet
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -84,6 +85,11 @@ class Settings(BaseSettings):
     DOCUMENT_PROCESSING_TIMEOUT: int = 300
     RAG_DEFAULT_TOP_K: int = 5
 
+    # 模型供应商（model-providers.md）：api_key Fernet 加密密钥 / 内网地址部署级开关 / 测试连接超时
+    ENCRYPTION_KEY: str = ""
+    ALLOW_PRIVATE_PROVIDER_URL: bool = False
+    PROVIDER_TEST_TIMEOUT_SECONDS: int = 10
+
     # CORS（逗号分隔多个来源）
     CORS_ORIGINS: str = "http://localhost:5173"
 
@@ -145,6 +151,21 @@ class Settings(BaseSettings):
                 "生产环境（APP_ENV=production）禁止使用默认/空密钥，"
                 f"请在环境变量或 .env 中显式设置: {', '.join(missing)}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_encryption_key(self) -> "Settings":
+        """D14：ENCRYPTION_KEY 已设置但非合法 Fernet 密钥 → 拒绝启动。
+        未设置不在此拦截（允许启动，仅供应商密钥功能不可用，main.py 启动时 WARN）。"""
+        if self.ENCRYPTION_KEY:
+            try:
+                Fernet(self.ENCRYPTION_KEY.encode())
+            except (ValueError, TypeError) as exc:
+                raise ValueError(
+                    "ENCRYPTION_KEY 不是合法的 Fernet 密钥"
+                    "（生成：python -c \"from cryptography.fernet import Fernet; "
+                    "print(Fernet.generate_key().decode())\"）"
+                ) from exc
         return self
 
 

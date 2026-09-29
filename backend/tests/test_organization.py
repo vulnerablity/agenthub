@@ -1,5 +1,9 @@
 # tests/test_organization.py
 # organization 接口集成测试：覆盖创建 / 成员管理 / 权限矩阵 / 转让 / 退出 / 解散
+from io import BytesIO
+
+from PIL import Image
+
 PASSWORD = "secret123"
 
 
@@ -40,12 +44,14 @@ async def test_create_org_and_lists(client):
     assert org["my_role"] == "owner"
     assert org["owner_username"] == "alice"
     assert org["member_count"] == 1
+    assert org["avatar_url"] is None
 
     # 我的组织列表
     lst = await client.get("/api/v1/organizations", headers=_auth(token))
     assert lst.status_code == 200
     assert len(lst.json()) == 1
     assert lst.json()[0]["role"] == "owner"
+    assert lst.json()[0]["avatar_url"] is None
 
     # 组织详情
     detail = await client.get(
@@ -70,6 +76,72 @@ async def test_create_org_validation(client):
         "/api/v1/organizations", json={"name": "x" * 101}, headers=_auth(token)
     )
     assert resp.status_code == 422
+
+
+async def test_organization_avatar_upload_read_remove_and_permissions(client):
+    await _register(client, "owner-avatar@test.com", "owner")
+    await _register(client, "viewer-avatar@test.com", "viewer")
+    owner_token = await _token(client, "owner-avatar@test.com")
+    viewer_token = await _token(client, "viewer-avatar@test.com")
+    org = (await _create_org(client, owner_token)).json()
+    added = await client.post(
+        f"/api/v1/organizations/{org['id']}/members",
+        json={"email": "viewer-avatar@test.com", "role": "viewer"},
+        headers=_auth(owner_token),
+    )
+    assert added.status_code == 201
+
+    image = Image.new("RGB", (96, 96), "#336699")
+    output = BytesIO()
+    image.save(output, format="PNG")
+    upload = await client.put(
+        f"/api/v1/organizations/{org['id']}/avatar",
+        files={"file": ("avatar.png", output.getvalue(), "image/png")},
+        headers=_auth(owner_token),
+    )
+    assert upload.status_code == 200
+    avatar_url = upload.json()["avatar_url"]
+    assert avatar_url
+
+    fetched = await client.get(
+        f"/api/v1/organizations/{org['id']}/avatar", headers=_auth(viewer_token)
+    )
+    assert fetched.status_code == 200
+    assert fetched.headers["content-type"] == "image/webp"
+    assert fetched.content[:4] == b"RIFF"
+    viewer_members = await client.get(
+        f"/api/v1/organizations/{org['id']}/members", headers=_auth(viewer_token)
+    )
+    assert viewer_members.status_code == 403
+
+    forbidden = await client.delete(
+        f"/api/v1/organizations/{org['id']}/avatar", headers=_auth(viewer_token)
+    )
+    assert forbidden.status_code == 403
+    removed = await client.delete(
+        f"/api/v1/organizations/{org['id']}/avatar", headers=_auth(owner_token)
+    )
+    assert removed.status_code == 204
+    detail = await client.get(
+        f"/api/v1/organizations/{org['id']}", headers=_auth(owner_token)
+    )
+    assert detail.json()["avatar_url"] is None
+
+
+async def test_organization_avatar_rejects_non_square_image(client):
+    await _register(client, "owner-square@test.com", "owner")
+    token = await _token(client, "owner-square@test.com")
+    org = (await _create_org(client, token)).json()
+    image = Image.new("RGB", (90, 60), "#336699")
+    output = BytesIO()
+    image.save(output, format="PNG")
+    response = await client.put(
+        f"/api/v1/organizations/{org['id']}/avatar",
+        files={"file": ("rect.png", output.getvalue(), "image/png")},
+        headers=_auth(token),
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "AVATAR_INVALID"
 
 
 async def test_org_requires_auth(client):
@@ -260,7 +332,7 @@ async def test_members_email_filter(client):
             headers=_auth(token),
         )
     resp = await client.get(
-        f"/api/v1/organizations/{org['id']}/members?email=bo", headers=_auth(token)
+        f"/api/v1/organizations/{org['id']}/members?search=bo", headers=_auth(token)
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -395,18 +467,22 @@ async def test_transfer_ownership(client):
     assert resp.status_code == 200
     assert resp.json()["role"] == "owner"
 
-    # owner_id 同步：详情 owner 已变，旧 owner 降为 admin
+    # owner_id 同步：详情 owner 已变，旧 owner 降为 member
     detail = (
         await client.get(f"/api/v1/organizations/{org['id']}", headers=_auth(bob_token))
     ).json()
     assert detail["my_role"] == "owner"
     assert detail["owner_username"] == "bob"
+    old_owner_detail = await client.get(
+        f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token)
+    )
+    assert old_owner_detail.json()["my_role"] == "member"
     alice_detail = (
         await client.get(
             f"/api/v1/organizations/{org['id']}", headers=_auth(alice_token)
         )
     ).json()
-    assert alice_detail["my_role"] == "admin"
+    assert alice_detail["my_role"] == "member"
 
     # 新 owner 获得全部权限（改名成功）
     resp = await client.patch(

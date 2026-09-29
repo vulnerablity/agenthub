@@ -9,8 +9,10 @@ from app.models.document_chunk import DocumentChunk
 from app.models.execution_log import ExecutionStep, LLMUsageLog
 from app.models.knowledge_base import KnowledgeBase
 from app.models.message import Message
+from app.models.model_provider import ModelProvider
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
+from app.models.provider_model import ProviderModel
 from app.models.role import Role
 from app.models.tool import AgentTool, Tool
 from app.models.user import User
@@ -27,8 +29,10 @@ __all__ = [
     "KnowledgeBase",
     "LLMUsageLog",
     "Message",
+    "ModelProvider",
     "Organization",
     "OrganizationMember",
+    "ProviderModel",
     "Role",
     "Tool",
     "User",

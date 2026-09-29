@@ -27,6 +27,7 @@ class OrganizationDetail(BaseModel):
 
     id: int
     name: str
+    avatar_url: str | None
     owner_id: int
     owner_username: str
     my_role: OrgRoleName
@@ -39,6 +40,7 @@ class OrganizationListItem(BaseModel):
 
     id: int
     name: str
+    avatar_url: str | None
     role: OrgRoleName
     owner_username: str
     member_count: int

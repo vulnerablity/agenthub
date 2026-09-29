@@ -16,6 +16,7 @@ export interface OrganizationUpdateRequest {
 export interface OrganizationDetail {
   id: number
   name: string
+  avatar_url: string | null
   owner_id: number
   owner_username: string
   my_role: OrgRole
@@ -26,6 +27,7 @@ export interface OrganizationDetail {
 export interface OrganizationListItem {
   id: number
   name: string
+  avatar_url: string | null
   role: OrgRole
   owner_username: string
   member_count: number

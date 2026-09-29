@@ -53,6 +53,11 @@ class OrganizationNotFound(AppError):
         super().__init__(404, "ORGANIZATION_NOT_FOUND", "组织不存在")
 
 
+class AvatarInvalid(AppError):
+    def __init__(self, message: str = "组织头像文件不合法") -> None:
+        super().__init__(400, "AVATAR_INVALID", message)
+
+
 class NotOrgMember(AppError):
     def __init__(self) -> None:
         super().__init__(403, "NOT_ORG_MEMBER", "您不是该组织成员")
@@ -292,3 +297,69 @@ class AgentToolNotFound(AppError):
 class ExecutionNotFound(AppError):
     def __init__(self) -> None:
         super().__init__(404, "EXECUTION_NOT_FOUND", "执行记录不存在")
+
+
+# 模型供应商域错误码（model-providers 模块）
+
+
+class ModelProviderNotFound(AppError):
+    def __init__(self) -> None:
+        super().__init__(404, "MODEL_PROVIDER_NOT_FOUND", "模型供应商不存在")
+
+
+class ModelProviderNameConflict(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "MODEL_PROVIDER_NAME_CONFLICT", "供应商名称已存在")
+
+
+class ModelProviderInUse(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            409, "MODEL_PROVIDER_IN_USE", "供应商已被智能体版本引用，无法删除"
+        )
+
+
+class ModelProviderModelConflict(AppError):
+    def __init__(self) -> None:
+        super().__init__(409, "MODEL_PROVIDER_MODEL_CONFLICT", "该模型标识已存在")
+
+
+class ModelProviderFieldRequired(AppError):
+    def __init__(self, field: str) -> None:
+        super().__init__(422, "MODEL_PROVIDER_FIELD_REQUIRED", f"{field}不能为空")
+
+
+class ModelProviderModelDisabled(AppError):
+    def __init__(self) -> None:
+        super().__init__(422, "MODEL_PROVIDER_MODEL_DISABLED", "所选模型已停用")
+
+
+class ModelCapabilityInvalid(AppError):
+    def __init__(self) -> None:
+        super().__init__(422, "MODEL_CAPABILITY_INVALID", "模型能力配置不合法")
+
+
+class ProviderUrlForbidden(AppError):
+    def __init__(self, reason: str = "地址不被允许") -> None:
+        super().__init__(400, "MODEL_PROVIDER_URL_FORBIDDEN", reason)
+
+
+class ProviderKeyInvalid(AppError):
+    def __init__(self, message: str = "供应商密钥不可用，请重新填写") -> None:
+        super().__init__(502, "MODEL_PROVIDER_KEY_INVALID", message)
+
+
+class ModelProviderDisabled(AppError):
+    def __init__(self) -> None:
+        super().__init__(502, "MODEL_PROVIDER_DISABLED", "模型供应商已停用")
+
+
+class EncryptionKeyMissing(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            500,
+            "ENCRYPTION_KEY_MISSING",
+            "ENCRYPTION_KEY 未配置，无法处理供应商密钥"
+            "（生成：python -c \"from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())\"）",
+        )

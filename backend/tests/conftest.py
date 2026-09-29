@@ -89,15 +89,18 @@ async def _cleanup(engine):
         KnowledgeBase,
         LLMUsageLog,
         Message,
+        ModelProvider,
         Organization,
         OrganizationMember,
+        ProviderModel,
         Tool,
         User,
     )
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:
-        # 外键顺序：消息 → 会话 → 版本 → 智能体 → 绑定 → 切块 → 文档 → 知识库 → 工具 → 成员 → 组织 → 用户
+        # 外键顺序：消息 → 会话 → 版本 → 智能体 → 绑定 → 切块 → 文档 → 知识库 → 工具 →
+        # 模型清单 → 供应商（agent_versions.provider_id 为 RESTRICT，须先删版本）→ 成员 → 组织 → 用户
         # 执行日志两表无外键（审计数据），最先清理
         await session.execute(delete(ExecutionStep))
         await session.execute(delete(LLMUsageLog))
@@ -110,6 +113,8 @@ async def _cleanup(engine):
         await session.execute(delete(Document))
         await session.execute(delete(KnowledgeBase))
         await session.execute(delete(Tool))
+        await session.execute(delete(ProviderModel))
+        await session.execute(delete(ModelProvider))
         await session.execute(delete(OrganizationMember))
         await session.execute(delete(Organization))
         await session.execute(delete(User))

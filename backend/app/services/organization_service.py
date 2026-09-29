@@ -30,6 +30,7 @@ from app.schemas.organization import (
     OrganizationListItem,
     OrganizationUpdateRequest,
 )
+from app.services.organization_avatar import OrganizationAvatarStore
 
 
 class OrganizationService:
@@ -69,6 +70,7 @@ class OrganizationService:
             OrganizationListItem(
                 id=m.organization.id,
                 name=m.organization.name,
+                avatar_url=self._avatar_url(m.organization),
                 role=m.role.name,
                 owner_username=owners.get(m.organization.id, ""),
                 member_count=counts.get(m.organization.id, 0),
@@ -98,22 +100,56 @@ class OrganizationService:
         from app.services.knowledge_service import KnowledgeService
         from app.services.tool_service import ToolService
 
+        avatar_key = org.avatar_key
         await self.agent_repo.delete_by_org(org.id)
         await KnowledgeService(self.db).delete_by_org(org.id)
         await ToolService(self.db).delete_by_org(org.id)
         await self.org_repo.delete_memberships(org.id)
         await self.org_repo.delete(org)
         await self.db.commit()
+        OrganizationAvatarStore().remove(avatar_key)
 
     # ---------- 成员 ----------
 
     async def list_members(
-        self, org: Organization, email: str | None = None
+        self, org: Organization, search: str | None = None
     ) -> list[MemberResponse]:
         return [
             self._member_response(m)
-            for m in await self.org_repo.list_memberships(org.id, email)
+            for m in await self.org_repo.list_memberships(org.id, search)
         ]
+
+    async def replace_avatar(self, org: Organization, content: bytes) -> str:
+        store = OrganizationAvatarStore()
+        key = store.normalize_and_store(org.id, content)
+        old_key = org.avatar_key
+        org.avatar_key = key
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            store.remove(key)
+            raise
+        if old_key != key:
+            store.remove(old_key)
+        return self._avatar_url(org) or ""
+
+    async def remove_avatar(self, org: Organization) -> None:
+        old_key = org.avatar_key
+        org.avatar_key = None
+        await self.db.commit()
+        OrganizationAvatarStore().remove(old_key)
+
+    @staticmethod
+    def avatar_path(org: Organization) -> str | None:
+        return OrganizationAvatarStore.path_for(org.avatar_key)
+
+    @staticmethod
+    def _avatar_url(org: Organization) -> str | None:
+        if org.avatar_key is None:
+            return None
+        filename = org.avatar_key.rsplit("/", 1)[-1]
+        return f"/api/v1/organizations/{org.id}/avatar?v={filename.split('.', 1)[0]}"
 
     async def add_member(
         self,
@@ -200,7 +236,7 @@ class OrganizationService:
     async def _transfer(
         self, org: Organization, caller: OrganizationMember, target: OrganizationMember
     ) -> None:
-        """owner 转让：目标升 owner、旧 owner 降 admin、同步 organizations.owner_id"""
+        """owner 转让：目标升 owner、旧 owner 降 member、同步 organizations.owner_id"""
         if caller.role.name != "owner":
             raise OwnerRequired()
         if target.user_id == caller.user_id:
@@ -208,10 +244,10 @@ class OrganizationService:
         if target.role.name == "owner":
             raise RoleNotAssignable()
         owner_role = await self._get_role("owner")
-        admin_role = await self._get_role("admin")
+        member_role = await self._get_role("member")
         # 直接赋值 relationship（非 role_id）：target.role 已加载，仅改外键不会更新已加载的关系对象
         target.role = owner_role
-        caller.role = admin_role
+        caller.role = member_role
         org.owner_id = target.user_id
 
     async def _change_role(
@@ -245,6 +281,7 @@ class OrganizationService:
         return OrganizationDetail(
             id=org.id,
             name=org.name,
+            avatar_url=self._avatar_url(org),
             owner_id=org.owner_id,
             owner_username=owner.username if owner else "未知用户",
             my_role=my_role,

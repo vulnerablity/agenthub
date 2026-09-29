@@ -56,9 +56,9 @@ class OrganizationRepository:
         return list(result.scalars().all())
 
     async def list_memberships(
-        self, org_id: int, email: str | None = None
+        self, org_id: int, search: str | None = None
     ) -> list[OrganizationMember]:
-        """组织成员列表（含用户与角色）；可按邮箱模糊过滤"""
+        """组织成员列表（含用户与角色）；可按名称或邮箱模糊过滤"""
         stmt = (
             select(OrganizationMember)
             .where(OrganizationMember.organization_id == org_id)
@@ -68,10 +68,13 @@ class OrganizationRepository:
             )
             .order_by(OrganizationMember.created_at, OrganizationMember.id)
         )
-        if email:
+        if search:
             stmt = stmt.where(
                 OrganizationMember.user_id.in_(
-                    select(User.id).where(User.email.like(f"%{email}%"))
+                    select(User.id).where(
+                        User.email.like(f"%{search}%")
+                        | User.username.like(f"%{search}%")
+                    )
                 )
             )
         result = await self.db.execute(stmt)

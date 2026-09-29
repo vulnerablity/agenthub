@@ -40,6 +40,8 @@ export interface AgentVersionCreateRequest {
   system_prompt?: string
   model_provider: string
   model_name: string
+  /** 绑定的模型供应商 id（model-providers.md D2）：null/缺省 = 全局默认（走 LLM_API_BASE） */
+  provider_id?: number | null
   temperature?: number | null
   max_tokens?: number | null
   config_json?: Record<string, unknown> | null
@@ -51,6 +53,8 @@ export interface AgentVersionItem {
   system_prompt: string
   model_provider: string
   model_name: string
+  /** 路由真源（D2/D3）：null = 全局回落；model_provider 仅为建版本时的名称快照 */
+  provider_id: number | null
   temperature: number | null
   max_tokens: number | null
   config_json: Record<string, unknown> | null

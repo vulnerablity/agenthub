@@ -2,7 +2,8 @@
 # 组织与成员接口：全部需登录；组织级操作经 require_org_role 校验组织存在/成员身份/角色
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession, require_org_role
 from app.models import Organization, OrganizationMember
@@ -61,6 +62,37 @@ async def update_organization(
     return await OrganizationService(db).rename(org, membership, data)
 
 
+@router.put("/{org_id}/avatar", response_model=OrganizationDetail)
+async def put_organization_avatar(
+    ctx: AdminCtx, db: DbSession, file: Annotated[UploadFile, File()]
+) -> OrganizationDetail:
+    org, membership = ctx
+    content = await file.read(5 * 1024 * 1024 + 1)
+    service = OrganizationService(db)
+    await service.replace_avatar(org, content)
+    return await service.get_detail(org, membership)
+
+
+@router.get("/{org_id}/avatar")
+async def get_organization_avatar(ctx: OrgCtx) -> Response:
+    org, _ = ctx
+    path = OrganizationService.avatar_path(org)
+    if path is None:
+        return Response(status_code=404)
+    return FileResponse(
+        path,
+        media_type="image/webp",
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/{org_id}/avatar", status_code=204)
+async def delete_organization_avatar(ctx: AdminCtx, db: DbSession) -> Response:
+    org, _ = ctx
+    await OrganizationService(db).remove_avatar(org)
+    return Response(status_code=204)
+
+
 @router.delete("/{org_id}", status_code=204)
 async def delete_organization(ctx: OwnerCtx, db: DbSession) -> Response:
     org, _ = ctx
@@ -70,12 +102,12 @@ async def delete_organization(ctx: OwnerCtx, db: DbSession) -> Response:
 
 @router.get("/{org_id}/members", response_model=list[MemberResponse])
 async def list_members(
-    ctx: OrgCtx,
+    ctx: AdminCtx,
     db: DbSession,
-    email: Annotated[str | None, Query(max_length=255)] = None,
+    search: Annotated[str | None, Query(max_length=255)] = None,
 ) -> list[MemberResponse]:
     org, _ = ctx
-    return await OrganizationService(db).list_members(org, email)
+    return await OrganizationService(db).list_members(org, search)
 
 
 @router.post("/{org_id}/members", response_model=MemberResponse, status_code=201)

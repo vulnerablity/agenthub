@@ -8,6 +8,7 @@ import {
   chatPath,
   executionsPath,
   knowledgeBasesPath,
+  modelProvidersPath,
   orgMembersPath,
   orgSettingsPath,
   ROUTE_PATHS,
@@ -28,7 +29,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `nav-item${isActive ? ' active' : ''}`
 
 /** 无组织时置灰的导航项（与后端权限一致：组织相关功能依赖当前组织） */
-function OrgDisabledItem({ icon, label }: { icon: 'settings' | 'users' | 'bot' | 'book' | 'wrench' | 'chat' | 'activity'; label: string }) {
+function OrgDisabledItem({ icon, label }: { icon: 'settings' | 'users' | 'bot' | 'book' | 'wrench' | 'chat' | 'activity' | 'layers'; label: string }) {
   return (
     <span className="nav-item disabled" title="请先创建或加入组织">
       <Icon name={icon} className="ic" />
@@ -54,6 +55,7 @@ export default function AppLayout() {
   }
 
   const orgNavDisabled = currentOrgId == null
+  const canManageOrganization = currentOrg?.my_role === 'owner' || currentOrg?.my_role === 'admin'
   const canSeeExecutions = canChatAgent(currentOrg?.my_role)
 
   return (
@@ -91,23 +93,25 @@ export default function AppLayout() {
             我的组织
           </NavLink>
 
-          <div className="nav-group">组织</div>
-          {orgNavDisabled ? (
-            <OrgDisabledItem icon="settings" label="组织设置" />
-          ) : (
-            <NavLink to={orgSettingsPath(currentOrgId)} className={navLinkClass}>
-              <Icon name="settings" className="ic" />
-              组织设置
-            </NavLink>
-          )}
-          {orgNavDisabled ? (
-            <OrgDisabledItem icon="users" label="成员管理" />
-          ) : (
-            <NavLink to={orgMembersPath(currentOrgId)} className={navLinkClass}>
-              <Icon name="users" className="ic" />
-              成员管理
-            </NavLink>
-          )}
+          {canManageOrganization || orgNavDisabled ? <>
+            <div className="nav-group">组织</div>
+            {orgNavDisabled ? (
+              <OrgDisabledItem icon="settings" label="组织设置" />
+            ) : canManageOrganization ? (
+              <NavLink to={orgSettingsPath(currentOrgId!)} className={navLinkClass}>
+                <Icon name="settings" className="ic" />
+                组织设置
+              </NavLink>
+            ) : null}
+            {orgNavDisabled ? (
+              <OrgDisabledItem icon="users" label="成员管理" />
+            ) : canManageOrganization ? (
+              <NavLink to={orgMembersPath(currentOrgId!)} className={navLinkClass}>
+                <Icon name="users" className="ic" />
+                成员管理
+              </NavLink>
+            ) : null}
+          </> : null}
 
           <div className="nav-group">智能体</div>
           {orgNavDisabled ? (
@@ -134,6 +138,14 @@ export default function AppLayout() {
               工具
             </NavLink>
           )}
+          {orgNavDisabled ? (
+            <OrgDisabledItem icon="layers" label="模型供应商" />
+          ) : (
+            <NavLink to={modelProvidersPath(currentOrgId)} className={navLinkClass}>
+              <Icon name="layers" className="ic" />
+              模型供应商
+            </NavLink>
+          )}
 
           <div className="nav-group">运行</div>
           {orgNavDisabled ? (
@@ -157,7 +169,7 @@ export default function AppLayout() {
 
         <div className="sb-foot">
           <div className="sb-user">
-            <span className={`avatar md ${avatarTone(me?.username ?? '')}`}>
+            <span className={`avatar md user-av user-avatar`}>
               {(me?.username ?? '?').slice(0, 1).toUpperCase()}
             </span>
             <span className="min-w-0">
@@ -182,10 +194,10 @@ export default function AppLayout() {
 }
 
 /** 根据用户名稳定映射头像渐变（av-1..av-6） */
-function avatarTone(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) % 997
-  }
-  return `av-${(hash % 6) + 1}`
-}
+// function avatarTone(name: string): string {
+//   let hash = 0
+//   for (let i = 0; i < name.length; i += 1) {
+//     hash = (hash * 31 + name.charCodeAt(i)) % 997
+//   }
+//   return `av-${(hash % 6) + 1}`
+// }

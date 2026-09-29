@@ -15,8 +15,9 @@ import { errorMessage } from '@/constants/error-messages'
 import { agentDetailPath } from '@/constants/routes'
 import { useAgent } from '@/hooks/useAgent'
 import { useKnowledgeBases } from '@/hooks/useKnowledgeBases'
+import { useModelProviders } from '@/hooks/useModelProviders'
 import { useOrg } from '@/hooks/useOrg'
-import type { AgentVersionCreateRequest } from '@/types'
+import type { AgentVersionCreateRequest, ModelProviderDetail } from '@/types'
 
 const versionSchema = z.object({
   provider: z.string().min(1, '请输入模型提供方').max(50, '提供方最多 50 个字符'),
@@ -48,13 +49,20 @@ const EMPTY_FORM: VersionForm = {
   systemPrompt: '',
 }
 
+/** 模型下拉「自定义模型」哨兵值：选中后切入手动输入（未登记模型放行，按默认能力处理 D4/D12） */
+const CUSTOM_MODEL = '__custom__'
+
 function buildPayload(
   values: VersionForm,
   configJson: Record<string, unknown> | null,
+  selectedProvider: ModelProviderDetail | null,
 ): AgentVersionCreateRequest {
   return {
-    model_provider: values.provider.trim(),
+    // 选中供应商时传名称快照（服务端按 D3 亦会以 provider.name 赋值）；全局默认保留自由输入
+    model_provider: selectedProvider ? selectedProvider.name : values.provider.trim(),
     model_name: values.modelName.trim(),
+    // 路由真源（D2）：全局默认 = 不传 provider_id（走 LLM_API_BASE，旧数据零迁移兼容）
+    provider_id: selectedProvider ? selectedProvider.id : undefined,
     temperature: values.temperature === '' ? null : Number(values.temperature),
     max_tokens: values.maxTokens === '' ? null : Number(values.maxTokens),
     system_prompt: values.systemPrompt,
@@ -89,6 +97,8 @@ export default function VersionForm() {
   const { data: org } = useOrg(orgId)
   const { data: agent } = useAgent(orgId, agentId)
   const { data: kbList } = useKnowledgeBases(orgId)
+  // 供应商列表（D10 全成员可读）：两级下拉第一级
+  const { data: providers, isError: providersFailed } = useModelProviders(orgId)
   const canManage = canManageAgent(org?.my_role)
   const [apiError, setApiError] = useState('')
   // RAG 绑定（knowledge.md D11）：随版本快照保存，合并进 config_json 而非覆盖其它键
@@ -97,33 +107,53 @@ export default function VersionForm() {
   // 上次已预填的版本 id：RAG 绑定数据加载后于渲染期同步预填（官方 adjust-state-during-render
   // 模式，避免 effect 内 setState 的连锁渲染，react-hooks/set-state-in-effect）
   const [loadedVersionId, setLoadedVersionId] = useState<number | null>(null)
+  // 两级模型选择（model-providers.md §9）：null = 全局默认（不绑定）
+  const [providerId, setProviderId] = useState<number | null>(null)
+  // 第二级选中项：model_key / CUSTOM_MODEL（自定义输入）；全局默认下不使用
+  const [modelKey, setModelKey] = useState('')
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<VersionForm>({
     resolver: zodResolver(versionSchema),
     defaultValues: EMPTY_FORM,
   })
 
-  // 基于当前版本预填（react-hook-form 的 reset 属库级表单更新，非 React setState）
-  useEffect(() => {
-    const current = agent?.current_version_detail
-    if (current) {
-      reset({
-        provider: current.model_provider,
-        modelName: current.model_name,
-        temperature: current.temperature != null ? String(current.temperature) : '',
-        maxTokens: current.max_tokens != null ? String(current.max_tokens) : '',
-        systemPrompt: current.system_prompt,
-      })
+  // 基于当前版本预填：React 状态于渲染期同步（adjust-state-during-render 模式，
+  // 避免 effect 内 setState 的连锁渲染，react-hooks/set-state-in-effect）；
+  // react-hook-form 的 reset 属库级表单更新，保留在 effect 中执行
+  const providersSettled = providers != null || providersFailed
+  const currentVersion = agent?.current_version_detail
+  const prefillSig = currentVersion
+    ? `${currentVersion.id}:${providersSettled ? '1' : '0'}`
+    : ''
+  const [appliedPrefillSig, setAppliedPrefillSig] = useState('')
+
+  // 待供应商列表就绪后执行一次：还原 provider 绑定与登记/自定义模型模式
+  if (currentVersion && providersSettled && prefillSig !== appliedPrefillSig) {
+    setAppliedPrefillSig(prefillSig)
+    const bound =
+      currentVersion.provider_id != null
+        ? ((providers ?? []).find((p) => p.id === currentVersion.provider_id) ?? null)
+        : null
+    if (bound) {
+      const registered = bound.models.some(
+        (m) => m.enabled && m.model_key === currentVersion.model_name,
+      )
+      setProviderId(bound.id)
+      setModelKey(registered ? currentVersion.model_name : CUSTOM_MODEL)
+    } else {
+      // 供应商已被删除或旧版本未绑定：回落全局默认自由输入（D2 旧数据零迁移兼容）
+      setProviderId(null)
+      setModelKey('')
     }
-  }, [agent, reset])
+  }
 
   // 渲染期同步 RAG 绑定预填（与上方表单 reset 同源触发，不在 effect 内 setState）
-  const currentVersion = agent?.current_version_detail
   if (currentVersion && loadedVersionId !== currentVersion.id) {
     setLoadedVersionId(currentVersion.id)
     const binding = readRagBinding(currentVersion.config_json)
@@ -131,14 +161,40 @@ export default function VersionForm() {
     setRagTopK(binding.topK)
   }
 
+  // 表单字段值预填（reset 为库级更新，非 React setState）
+  useEffect(() => {
+    const current = agent?.current_version_detail
+    if (!current || !providersSettled) return
+    const bound =
+      current.provider_id != null
+        ? ((providers ?? []).find((p) => p.id === current.provider_id) ?? null)
+        : null
+    reset({
+      // 绑定供应商时 model_provider 预填名称快照；否则保留旧自由输入
+      provider: bound ? bound.name : current.model_provider,
+      modelName: current.model_name,
+      temperature: current.temperature != null ? String(current.temperature) : '',
+      maxTokens: current.max_tokens != null ? String(current.max_tokens) : '',
+      systemPrompt: current.system_prompt,
+    })
+  }, [agent, providers, providersSettled, reset])
+
+  // 当前选中的供应商（null = 全局默认）：提交时决定 provider_id 与 model_provider 快照
+  const selectedProvider =
+    providerId != null ? (providers?.find((p) => p.id === providerId) ?? null) : null
+
   const submitMutation = useMutation({
     mutationFn: (values: VersionForm) =>
       agentApi.createVersion(agentId!, {
-        ...buildPayload(values, {
-          // 合并原版本其它配置键，仅更新 rag（不覆盖自定义扩展字段，knowledge.md D11）
-          ...(agent?.current_version_detail?.config_json ?? {}),
-          rag: { knowledge_base_ids: selectedKbIds, rag_top_k: ragTopK },
-        }),
+        ...buildPayload(
+          values,
+          {
+            // 合并原版本其它配置键，仅更新 rag（不覆盖自定义扩展字段，knowledge.md D11）
+            ...(agent?.current_version_detail?.config_json ?? {}),
+            rag: { knowledge_base_ids: selectedKbIds, rag_top_k: ragTopK },
+          },
+          selectedProvider,
+        ),
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -173,6 +229,31 @@ export default function VersionForm() {
     )
   }
 
+  // ---- 两级模型选择（model-providers.md §9） ----
+  const enabledModels = selectedProvider?.models.filter((m) => m.enabled) ?? []
+
+  const handleProviderChange = (raw: string) => {
+    if (raw === '') {
+      // 全局默认：model_provider/model_name 保持自由输入（保留旧快照文本可继续编辑）
+      setProviderId(null)
+      setModelKey('')
+      return
+    }
+    const provider = providers?.find((p) => p.id === Number(raw))
+    if (!provider) return
+    setProviderId(provider.id)
+    setModelKey(provider.models.some((m) => m.enabled) ? '' : CUSTOM_MODEL)
+    // 选中供应商时 model_provider 写入名称快照（服务端按 D3/D12 亦会赋值）
+    setValue('provider', provider.name)
+    setValue('modelName', '')
+  }
+
+  const handleModelChange = (key: string) => {
+    setModelKey(key)
+    // 登记模型直接回填 model_name；自定义模型清空待输入
+    setValue('modelName', key === CUSTOM_MODEL ? '' : key)
+  }
+
   return (
     <div className="mx-auto max-w-2xl">
       <div className="page-head">
@@ -193,11 +274,34 @@ export default function VersionForm() {
             模型配置
           </h3>
           <div className="mt-4 grid g2">
+            <div className="field">
+              <label htmlFor="version-provider-select" className="lbl">
+                模型供应商
+              </label>
+              <select
+                id="version-provider-select"
+                className="select w-full"
+                value={providerId ?? ''}
+                onChange={(e) => handleProviderChange(e.target.value)}
+              >
+                <option value="">全局默认（不绑定）</option>
+                {providers?.map((p) => (
+                  <option key={p.id} value={p.id} disabled={!p.enabled}>
+                    {p.name}
+                    {p.enabled ? '' : '（已停用）'}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[12px] muted">
+                全局默认沿用平台 LLM_API_BASE 配置；选择供应商后从其启用模型中选取
+              </p>
+            </div>
             <div>
               <TextField
                 label="LLM Provider"
                 placeholder="例如：openai"
                 list="provider-options"
+                readOnly={selectedProvider != null}
                 error={errors.provider?.message}
                 {...register('provider')}
               />
@@ -206,15 +310,62 @@ export default function VersionForm() {
                   <option key={p} value={p} />
                 ))}
               </datalist>
+              {selectedProvider != null ? (
+                <p className="mt-1.5 text-[12px] muted">
+                  已绑定供应商，此处为名称快照（随版本保存，不随后续改名回写）
+                </p>
+              ) : null}
             </div>
-            <TextField
-              label="模型"
-              placeholder="例如：gpt-4o-mini"
-              error={errors.modelName?.message}
-              {...register('modelName')}
-            />
           </div>
           <div className="mt-4 grid g2">
+            {selectedProvider == null ? (
+              <TextField
+                label="模型"
+                placeholder="例如：gpt-4o-mini"
+                error={errors.modelName?.message}
+                {...register('modelName')}
+              />
+            ) : modelKey === CUSTOM_MODEL ? (
+              <div>
+                <TextField
+                  label="模型名称（自定义）"
+                  placeholder="输入供应商支持的模型标识"
+                  error={errors.modelName?.message}
+                  {...register('modelName')}
+                />
+                {/* 自定义模型旁注（D4/D12）：未登记模型放行，按默认能力处理 */}
+                <p className="mt-1.5 text-[12px] text-amber-600">
+                  未登记模型按默认能力处理：工具调用开、流式用量开、思考模式关
+                </p>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="version-model-select" className="lbl">
+                  模型（已启用）
+                </label>
+                <select
+                  id="version-model-select"
+                  className="select w-full"
+                  value={modelKey}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                >
+                  <option value="" disabled>
+                    请选择模型
+                  </option>
+                  {enabledModels.map((m) => (
+                    <option key={m.id} value={m.model_key}>
+                      {m.display_name}（{m.model_key}）
+                    </option>
+                  ))}
+                  <option value={CUSTOM_MODEL}>自定义模型（手动输入）</option>
+                </select>
+                {enabledModels.length === 0 ? (
+                  <p className="mt-1.5 text-[12px] muted">
+                    该供应商暂无启用模型，请改选「自定义模型」手动输入
+                  </p>
+                ) : null}
+              </div>
+            )}
             <TextField
               label="Temperature"
               type="number"
@@ -223,6 +374,8 @@ export default function VersionForm() {
               error={errors.temperature?.message}
               {...register('temperature')}
             />
+          </div>
+          <div className="mt-4 grid g2">
             <TextField
               label="Max Tokens"
               type="number"
