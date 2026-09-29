@@ -287,7 +287,7 @@ async def test_version_binding_rules(client):
     provider = (
         await _create_provider(client, token, org["id"], name="D12供应")
     ).json()
-    hdr = _hdr(token, org["id"])
+    # hdr = _hdr(token, org["id"])
 
     # 禁用模型 → 422
     model_id = provider["models"][0]["id"]
@@ -414,10 +414,10 @@ class _FakeResp:
 
 class _FakeAsyncClient:
     status_code = 200
-    calls = []
 
     def __init__(self, **kwargs):
-        pass
+        self.calls=[]
+        
 
     async def __aenter__(self):
         return self

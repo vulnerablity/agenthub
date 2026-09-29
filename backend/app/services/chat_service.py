@@ -27,7 +27,6 @@ from app.core.exceptions import (
     MessageContentRequired,
     ModelProviderDisabled,
     ModelProviderNotFound,
-    ProviderKeyInvalid,
     VectorStoreError,
 )
 from app.integrations.llm import get_llm_client
@@ -460,14 +459,11 @@ class ChatService:
             raise ModelProviderNotFound()
         if not provider.enabled:
             raise ModelProviderDisabled()
-        try:
-            api_key = (
-                decrypt_api_key(provider.api_key_encrypted)
-                if provider.api_key_encrypted
-                else None
-            )
-        except ProviderKeyInvalid:
-            raise
+        api_key = (
+            decrypt_api_key(provider.api_key_encrypted)
+            if provider.api_key_encrypted
+            else None
+        )
         model_row = (
             await self.db.execute(
                 select(ProviderModel).where(
