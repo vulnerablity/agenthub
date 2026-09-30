@@ -10,6 +10,8 @@ export interface AgentCreateRequest {
   system_prompt?: string
   model_provider: string
   model_name: string
+  /** 绑定的模型供应商 id（model-providers.md D2）：null/缺省 = 全局默认（走 LLM_API_BASE） */
+  provider_id?: number | null
   temperature?: number | null
   max_tokens?: number | null
   config_json?: Record<string, unknown> | null

@@ -15,8 +15,9 @@ import { AGENT_STATUS_LABELS, PROVIDER_OPTIONS, canManageAgent } from '@/constan
 import { errorMessage } from '@/constants/error-messages'
 import { agentDetailPath, agentsPath } from '@/constants/routes'
 import { useAgent } from '@/hooks/useAgent'
+import { useModelProviders } from '@/hooks/useModelProviders'
 import { useOrg } from '@/hooks/useOrg'
-import type { AgentCreateRequest, AgentUpdateRequest } from '@/types'
+import type { AgentCreateRequest, AgentUpdateRequest, ModelProviderDetail } from '@/types'
 
 // temperature / max_tokens 以字符串承载：空串表示「运行时默认」，与后端 null 语义对齐
 // 模型配置必填仅创建态生效（onSubmit 内 setError 判定，编辑态不展示这些字段）
@@ -58,15 +59,24 @@ const EMPTY_FORM: AgentForm = {
   systemPrompt: '',
 }
 
-function buildCreatePayload(values: AgentForm): AgentCreateRequest {
+/** 模型下拉「自定义模型」哨兵值：选中后切入手动输入（未登记模型放行，按默认能力处理 D4/D12） */
+const CUSTOM_MODEL = '__custom__'
+
+function buildCreatePayload(
+  values: AgentForm,
+  selectedProvider: ModelProviderDetail | null,
+): AgentCreateRequest {
   return {
     name: values.name,
     description: values.description.trim() ? values.description.trim() : null,
     avatar_url: values.avatarUrl.trim() ? values.avatarUrl.trim() : null,
     status: values.status,
     system_prompt: values.systemPrompt,
-    model_provider: values.provider.trim(),
+    // 选中供应商时传名称快照（服务端按 D3 亦会以 provider.name 赋值）；全局默认保留自由输入
+    model_provider: selectedProvider ? selectedProvider.name : values.provider.trim(),
     model_name: values.modelName.trim(),
+    // 路由真源（D2）：全局默认 = 不传 provider_id（走 LLM_API_BASE，旧数据零迁移兼容）
+    provider_id: selectedProvider ? selectedProvider.id : undefined,
     temperature: values.temperature === '' ? null : Number(values.temperature),
     max_tokens: values.maxTokens === '' ? null : Number(values.maxTokens),
   }
@@ -90,8 +100,14 @@ export default function AgentForm() {
   const queryClient = useQueryClient()
   const { data: org } = useOrg(orgId)
   const { data: agent } = useAgent(orgId, agentId, isEdit)
+  // 供应商列表（D10 全成员可读）：两级下拉第一级（model-providers.md §9）
+  const { data: providers } = useModelProviders(orgId)
   const canManage = canManageAgent(org?.my_role)
   const [apiError, setApiError] = useState('')
+  // 两级模型选择（model-providers.md §9）：null = 全局默认（不绑定）
+  const [providerId, setProviderId] = useState<number | null>(null)
+  // 第二级选中项：model_key / CUSTOM_MODEL（自定义输入）；全局默认下不使用
+  const [modelKey, setModelKey] = useState('')
 
   const {
     register,
@@ -122,11 +138,39 @@ export default function AgentForm() {
     }
   }, [agent, isEdit, reset])
 
+  // 当前选中的供应商（null = 全局默认）：提交时决定 provider_id 与 model_provider 快照
+  const selectedProvider =
+    providerId != null ? (providers?.find((p) => p.id === providerId) ?? null) : null
+  // 两级模型选择（model-providers.md §9）：第二级只列出启用模型
+  const enabledModels = selectedProvider?.models.filter((m) => m.enabled) ?? []
+
+  const handleProviderChange = (raw: string) => {
+    if (raw === '') {
+      // 全局默认：model_provider/model_name 保持自由输入（保留旧快照文本可继续编辑）
+      setProviderId(null)
+      setModelKey('')
+      return
+    }
+    const provider = providers?.find((p) => p.id === Number(raw))
+    if (!provider) return
+    setProviderId(provider.id)
+    setModelKey(provider.models.some((m) => m.enabled) ? '' : CUSTOM_MODEL)
+    // 选中供应商时 model_provider 写入名称快照（服务端按 D3/D12 亦会赋值）
+    setValue('provider', provider.name)
+    setValue('modelName', '')
+  }
+
+  const handleModelChange = (key: string) => {
+    setModelKey(key)
+    // 登记模型直接回填 model_name；自定义模型清空待输入
+    setValue('modelName', key === CUSTOM_MODEL ? '' : key)
+  }
+
   const submitMutation = useMutation({
     mutationFn: (values: AgentForm) =>
       isEdit
         ? agentApi.update(agentId!, buildUpdatePayload(values))
-        : agentApi.create(buildCreatePayload(values)),
+        : agentApi.create(buildCreatePayload(values, selectedProvider)),
     onSuccess: async ({ data }) => {
       await queryClient.invalidateQueries({ queryKey: ['org', orgId, 'agents'] })
       if (isEdit) {
@@ -235,11 +279,34 @@ export default function AgentForm() {
                   模型配置（初始版本 v1）
                 </h3>
                 <div className="mt-4 grid g2">
+                  <div className="field">
+                    <label htmlFor="agent-provider-select" className="lbl">
+                      模型供应商
+                    </label>
+                    <select
+                      id="agent-provider-select"
+                      className="select w-full"
+                      value={providerId ?? ''}
+                      onChange={(e) => handleProviderChange(e.target.value)}
+                    >
+                      <option value="">全局默认（不绑定）</option>
+                      {providers?.map((p) => (
+                        <option key={p.id} value={p.id} disabled={!p.enabled}>
+                          {p.name}
+                          {p.enabled ? '' : '（已停用）'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1.5 text-[12px] muted">
+                      全局默认沿用平台 LLM_API_BASE 配置；选择供应商后从其启用模型中选取
+                    </p>
+                  </div>
                   <div>
                     <TextField
                       label="LLM Provider"
                       placeholder="例如：openai"
                       list="provider-options"
+                      readOnly={selectedProvider != null}
                       error={errors.provider?.message}
                       {...register('provider')}
                     />
@@ -248,15 +315,62 @@ export default function AgentForm() {
                         <option key={p} value={p} />
                       ))}
                     </datalist>
+                    {selectedProvider != null ? (
+                      <p className="mt-1.5 text-[12px] muted">
+                        已绑定供应商，此处为名称快照（随版本保存，不随后续改名回写）
+                      </p>
+                    ) : null}
                   </div>
-                  <TextField
-                    label="模型"
-                    placeholder="例如：gpt-4o-mini"
-                    error={errors.modelName?.message}
-                    {...register('modelName')}
-                  />
                 </div>
                 <div className="mt-4 grid g2">
+                  {selectedProvider == null ? (
+                    <TextField
+                      label="模型"
+                      placeholder="例如：gpt-4o-mini"
+                      error={errors.modelName?.message}
+                      {...register('modelName')}
+                    />
+                  ) : modelKey === CUSTOM_MODEL ? (
+                    <div>
+                      <TextField
+                        label="模型名称（自定义）"
+                        placeholder="输入供应商支持的模型标识"
+                        error={errors.modelName?.message}
+                        {...register('modelName')}
+                      />
+                      {/* 自定义模型旁注（D4/D12）：未登记模型放行，按默认能力处理 */}
+                      <p className="mt-1.5 text-[12px] text-amber-600">
+                        未登记模型按默认能力处理：工具调用开、流式用量开、思考模式关
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="field">
+                      <label htmlFor="agent-model-select" className="lbl">
+                        模型（已启用）
+                      </label>
+                      <select
+                        id="agent-model-select"
+                        className="select w-full"
+                        value={modelKey}
+                        onChange={(e) => handleModelChange(e.target.value)}
+                      >
+                        <option value="" disabled>
+                          请选择模型
+                        </option>
+                        {enabledModels.map((m) => (
+                          <option key={m.id} value={m.model_key}>
+                            {m.display_name}（{m.model_key}）
+                          </option>
+                        ))}
+                        <option value={CUSTOM_MODEL}>自定义模型（手动输入）</option>
+                      </select>
+                      {enabledModels.length === 0 ? (
+                        <p className="mt-1.5 text-[12px] muted">
+                          该供应商暂无启用模型，请改选「自定义模型」手动输入
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
                   <div className="field">
                     <label htmlFor="agent-temperature" className="lbl">
                       Temperature
@@ -281,6 +395,8 @@ export default function AgentForm() {
                       <p className="err-text">{errors.temperature.message}</p>
                     ) : null}
                   </div>
+                </div>
+                <div className="mt-4 grid g2">
                   <TextField
                     label="Max Tokens"
                     type="number"
