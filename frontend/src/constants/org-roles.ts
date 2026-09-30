@@ -3,7 +3,7 @@
 import type { AssignableRole, OrgRole } from '@/types'
 
 export const ORG_ROLE_LABELS: Record<OrgRole, string> = {
-  owner: '企业拥有者',
+  owner: '组织拥有者',
   admin: '管理员',
   member: '普通用户',
   viewer: '查看者',

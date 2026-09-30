@@ -19,3 +19,8 @@ export function canManageAgent(role: string | undefined): boolean {
 export function canChatAgent(role: string | undefined): boolean {
   return role === 'owner' || role === 'admin' || role === 'member'
 }
+
+/** 模型供应商管理能力收敛：owner/admin 可建/改/删/启停，member/viewer 只读（后端为准，D10） */
+export function canManageModelProviders(role: string | undefined): boolean {
+  return role === 'owner' || role === 'admin'
+}

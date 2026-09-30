@@ -17,6 +17,9 @@ class AgentCreateRequest(BaseModel):
     avatar_url: str | None = Field(default=None, max_length=500)
     status: AgentStatus = "enabled"
     system_prompt: str = Field(default="", max_length=10000)
+    # 供应商路由（model-providers.md D2）：None = 全局 LLM_API_BASE 回落；
+    # model_provider 此时为展示快照（选中供应商时服务端改写为供应商名，D3）
+    provider_id: int | None = None
     model_provider: str = Field(min_length=1, max_length=50)
     model_name: str = Field(min_length=1, max_length=100)
     temperature: float | None = Field(default=None, ge=0, le=2)
@@ -52,9 +55,10 @@ class AgentListItem(BaseModel):
 
 
 class AgentVersionCreateRequest(BaseModel):
-    """创建版本请求（需求 4.5 字段）"""
+    """创建版本请求（需求 4.5 字段）；provider_id 语义同 AgentCreateRequest（D2/D12）"""
 
     system_prompt: str = Field(default="", max_length=10000)
+    provider_id: int | None = None
     model_provider: str = Field(min_length=1, max_length=50)
     model_name: str = Field(min_length=1, max_length=100)
     temperature: float | None = Field(default=None, ge=0, le=2)
@@ -68,6 +72,7 @@ class AgentVersionItem(BaseModel):
     id: int
     version: int
     system_prompt: str
+    provider_id: int | None
     model_provider: str
     model_name: str
     temperature: float | None

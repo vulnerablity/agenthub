@@ -315,6 +315,7 @@ AgentHub provides:
 - 根目录 `.env`：供 `docker compose` / CI / 部署读取（MySQL 使用 `agenthub` 用户）。
 - `backend/.env`：本地直接运行后端时优先读取（本机数据库/Redis 实际凭据），`config.py` 会先读它、再回退根目录 `.env`；两处字段名保持一致。若本机 MySQL 不是 `root/123456@localhost:3306`，请改 `backend/.env` 的 `MYSQL_*` 与 `DATABASE_URL`。
 - LLM：`LLM_API_BASE` / `LLM_API_KEY` 必填（OpenAI 兼容网关），否则 LLM 对话与 RAG 不可用；旧字段名 `LLM_BASE_URL` 仍兼容。
+- 模型供应商：`ENCRYPTION_KEY`（供应商 api_key 的 Fernet 加密密钥，**丢失将导致已存密钥不可解密，务必备份**；生成：`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`，多实例部署必须一致）；`ALLOW_PRIVATE_PROVIDER_URL` 放行 http/内网供应商地址（自建 Ollama 场景，生产公网部署保持 false）。详见 `docs/模块设计文档/model-providers.md`。
 
 ### 2. 一键安装
 

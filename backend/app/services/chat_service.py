@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -24,11 +25,21 @@ from app.core.exceptions import (
     LLMTimeout,
     LLMUpstreamError,
     MessageContentRequired,
+    ModelProviderDisabled,
+    ModelProviderNotFound,
     VectorStoreError,
 )
 from app.integrations.llm import get_llm_client
 from app.integrations.tool_runners import ToolResult, run_tool, to_openai_tool
-from app.models import AgentVersion, Conversation, Message, Organization, User
+from app.models import (
+    AgentVersion,
+    Conversation,
+    Message,
+    ModelProvider,
+    Organization,
+    ProviderModel,
+    User,
+)
 from app.repositories.conversation_repo import ConversationRepository
 from app.repositories.tool_repo import ToolRepository
 from app.schemas.chat import (
@@ -43,9 +54,11 @@ from app.schemas.chat import (
     SseToolResultPayload,
 )
 from app.schemas.knowledge import RAGSource, SearchRequest, rag_config_from
+from app.schemas.model_provider import DEFAULT_CAPABILITIES
 from app.schemas.tool import ToolCallRun
 from app.services.execution_service import ExecutionService, new_execution_id
 from app.services.knowledge_service import KnowledgeService
+from app.utils.crypto import decrypt_api_key
 
 DEFAULT_TITLE = "新对话"
 
@@ -79,6 +92,11 @@ class _StreamCtx:
     org_id: int
     user_id: int
     agent_id: int
+    # 供应商路由（model-providers.md D2/D4）：None 三元组 = 旧行为（全局 LLM_API_BASE）；
+    # caps 为能力矩阵（tool_call/reasoning/stream_usage），providers 解析结果整请求缓存
+    provider_base_url: str | None
+    provider_api_key: str | None
+    caps: dict[str, Any] | None
 
 
 def _elapsed_ms(started: float) -> int:
@@ -377,6 +395,10 @@ class ChatService:
             Message(conversation_id=conversation.id, role="user", content=content)
         )
         await self.db.commit()
+        # 供应商路由解析（model-providers.md D2/D4）：provider_id 空 → 三元 None（旧行为）
+        provider_base_url, provider_api_key, caps = await self._resolve_provider(
+            org, version
+        )
         # 执行监控（execution.md）：execution 分组键 + RAG 检索步骤（仅绑定 KB 时才发生检索）
         ctx = _StreamCtx(
             conversation=conversation,
@@ -391,6 +413,9 @@ class ChatService:
             org_id=org.id,
             user_id=user.id,
             agent_id=conversation.agent_id,
+            provider_base_url=provider_base_url,
+            provider_api_key=provider_api_key,
+            caps=caps,
         )
         if rag_config is not None and rag_config.knowledge_base_ids:
             await self._record_step(
@@ -415,6 +440,41 @@ class ChatService:
                 1, {"role": "system", "content": self._rag_context_prompt(sources)}
             )
         return ctx
+
+    async def _resolve_provider(
+        self, org: Organization, version: AgentVersion
+    ) -> tuple[str | None, str | None, dict[str, Any] | None]:
+        """供应商路由解析（model-providers.md D2/D4）：
+        - provider_id IS NULL → (None, None, None)：不查任何表，LLM 走全局配置（旧行为逐字节不变）
+        - 非空 → 组织内供应商 + 解密 key + 按 (provider_id, model_name) 解析能力矩阵；
+          未登记模型（自定义兜底）按 DEFAULT_CAPABILITIES（D4）；
+          供应商停用 → 502 MODEL_PROVIDER_DISABLED；解密失败 → 502 MODEL_PROVIDER_KEY_INVALID"""
+        if version.provider_id is None:
+            return None, None, None
+        provider = await self.db.get(ModelProvider, version.provider_id)
+        if provider is None or provider.organization_id != org.id:
+            raise ModelProviderNotFound()
+        if not provider.enabled:
+            raise ModelProviderDisabled()
+        api_key = (
+            decrypt_api_key(provider.api_key_encrypted)
+            if provider.api_key_encrypted
+            else None
+        )
+        model_row = (
+            await self.db.execute(
+                select(ProviderModel).where(
+                    ProviderModel.provider_id == provider.id,
+                    ProviderModel.model_key == version.model_name,
+                    ProviderModel.enabled.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        caps = {
+            **DEFAULT_CAPABILITIES,
+            **((model_row.capabilities or {}) if model_row else {}),
+        }
+        return provider.base_url, api_key, caps
 
     async def _load_agent_tools(
         self, agent_id: int
@@ -509,7 +569,17 @@ class ChatService:
                     model=ctx.version.model_name,
                     temperature=ctx.version.temperature,
                     max_tokens=ctx.version.max_tokens,
-                    tools=ctx.tools or None,
+                    # 能力矩阵驱动参数适配（model-providers.md D4）：
+                    # 不支持工具调用的模型不传 tools/tool_choice；
+                    # caps 为 None（旧路径）时行为与改造前逐字节一致
+                    tools=(ctx.tools or None)
+                    if (ctx.caps is None or ctx.caps.get("tool_call", True))
+                    else None,
+                    base_url=ctx.provider_base_url,
+                    api_key=ctx.provider_api_key,
+                    stream_usage=True
+                    if ctx.caps is None
+                    else ctx.caps.get("stream_usage", True),
                 ):
                     if "delta" in item:
                         deltas.append(item["delta"])

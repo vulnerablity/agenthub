@@ -1,16 +1,17 @@
 # Organization 组织管理模块设计文档
 
 > 本文档描述 Organization 组织管理模块的**当前实际实现**，以代码为准，供后期维护与迭代参考。
-> 范围：组织 CRUD 与成员管理（10 个后端接口 + 前端 AppLayout 布局与四个业务页）。用户认证与 Token 机制见《Auth 模块设计文档》（`docs/模块设计文档/auth.md`）。所有文件引用均为相对路径。
+> 范围：组织 CRUD、成员管理、头像接口与前端组织管理入口。用户认证与 Token 机制见《Auth 模块设计文档》（`docs/模块设计文档/auth.md`）。所有文件引用均为相对路径。
 
 ## 1. 模块概述
 
 功能清单：
 
 - 组织：创建（创建者自动成为 owner 成员）、我的组织列表、组织详情、改名（owner/admin）、解散（owner）
-- 成员：成员列表（按邮箱模糊过滤）、添加已注册用户（owner/admin）、修改成员角色（owner/admin）、owner 转让（仅 owner）、移除成员（owner/admin）、本人退出（owner 除外）
+- 成员：成员列表（按用户名/邮箱模糊过滤，仅 owner/admin）、添加已注册用户（owner/admin）、修改成员角色（owner/admin）、owner 转让（仅 owner）、移除成员（owner/admin）、本人退出（owner 除外）
+- 头像：组织表可空 `avatar_key`；owner/admin 上传、替换和移除；所有组织成员可在组织头像组件内读取
 
-需求来源：`docs/需求文档 V1.0.md` 3.2 组织管理、2.1–2.4 用户角色、4.2/4.3 数据表、8 验收标准第 2 条（创建企业组织）。
+需求来源：`docs/需求文档 V1.0.md` 3.2 组织管理、2.1–2.4 组织内角色、4.2/4.3 数据表、8 验收标准第 2 条（创建企业组织）。
 
 需求覆盖对照（以《需求文档 V1.0》为准）：
 
@@ -31,9 +32,11 @@
 | D1 | 只支持添加**已注册**用户，不做未注册邮箱邀请 | 复用 auth 模块三表，无 invites 表、无新迁移 |
 | D2 | 组织名仅校验 1–100 字符，**不做全局唯一** | 多租户下允许同名 |
 | D3 | 用户可加入多个组织，同组织内唯一 | `uq_org_member(organization_id, user_id)` 已保证 |
-| D4 | 转让后旧 owner 自动降为 `admin` | 保留管理权，转让不等于被请出 |
+| D4 | 转让后旧 owner 自动降为 `member` | 管理权限随所有权转移；旧 owner 保留组织普通成员身份 |
 | D5 | `organizations.owner_id` 与 owner 角色的成员保持强一致 | 转让事务内同步两处 |
-| D6 | 成员列表 V1 全量返回 + `email` 模糊过滤参数，不分页 | 数据量可控，后续可平滑加分页 |
+| D6 | 成员列表 V1 全量返回 + `search` 用户名/邮箱模糊过滤参数，不分页 | 仅 owner/admin 可以搜索和查看成员列表；数据量可控，后续可平滑加分页 |
+| D7 | `organizations.avatar_key` 可空，存头像相对键，不存本机绝对路径 | 新组织默认空；旧组织无需回填，前端回退首字头像 |
+| D8 | 头像以 1:1 图片为输入，服务端重新编码为 WebP、内容哈希命名 | 上传体积 ≤5MB、边长 ≤4096、输出 ≤1MB；图片读需组织成员鉴权 |
 
 前后端对应关系：
 
@@ -54,13 +57,14 @@
 
 | 操作 | owner | admin | member | viewer |
 | --- | --- | --- | --- | --- |
-| 查看组织详情 / 成员列表 | ✔ | ✔ | ✔ | ✔ |
+| 查看组织详情 / 头像 | ✔ | ✔ | ✔ | ✔ |
+| 查看 / 搜索成员列表 | — | ✔ | — | — |
 | 改名 | ✔ | ✔ | — | — |
 | 添加成员（角色限 admin/member/viewer） | ✔ | ✔ | — | — |
 | 修改 member/viewer 角色 | ✔ | ✔ | — | — |
 | 修改 admin 角色 / 移除 admin | ✔ | — | — | — |
 | 移除成员 | ✔（全部） | ✔（限 member/viewer） | — | — |
-| 转让（role→owner，旧 owner 降 admin） | ✔ | — | — | — |
+| 转让（role→owner，旧 owner 降 member） | ✔ | — | — | — |
 | 解散 | ✔ | — | — | — |
 | 本人退出 | —（须先转让） | ✔ | ✔ | ✔ |
 
@@ -117,9 +121,12 @@ org_id（由依赖从路径注入，handler 不重复声明）
 | `GET /organizations/{org_id}` | 200 `OrganizationDetail` | OrgCtx | my_role 来自 membership |
 | `PATCH /organizations/{org_id}` `{name}` | 200 | AdminCtx | — |
 | `DELETE /organizations/{org_id}` | 204 | OwnerCtx | 事务：先删全部智能体（版本随外键级联）、再删成员关系、最后删组织（外键顺序，agent 模块 D10） |
-| `GET /organizations/{org_id}/members` `?email=` | 200 `MemberResponse[]` | OrgCtx | `selectinload(user, role)`；email 过滤用 `user_id IN (子查询)` |
+| `GET /organizations/{org_id}/members` `?search=` | 200 `MemberResponse[]` | AdminCtx | `selectinload(user, role)`；用户名/邮箱过滤用 `user_id IN (子查询)` |
 | `POST /organizations/{org_id}/members` `{email, role}` | 201 | AdminCtx | 见 2.5；role 由 `Literal["admin","member","viewer"]` 限定 |
 | `PATCH /organizations/{org_id}/members/{user_id}` `{role}` | 200 | AdminCtx | role=owner 即转让（见 2.5） |
+| `PUT /organizations/{org_id}/avatar` multipart `file` | 200 `OrganizationDetail` | AdminCtx | 重编码 WebP、内容哈希键；DB 更新成功后清理旧键 |
+| `GET /organizations/{org_id}/avatar` | 200 `image/webp` | OrgCtx | 受组织成员鉴权；immutable 长缓存，查询参数含内容哈希 |
+| `DELETE /organizations/{org_id}/avatar` | 204 | AdminCtx | 字段清空后清理头像文件 |
 | `DELETE /organizations/{org_id}/members/me` | 204 | OrgCtx | 本人退出；owner → OWNER_CANNOT_LEAVE |
 | `DELETE /organizations/{org_id}/members/{user_id}` | 204 | AdminCtx | 见 2.5 |
 
@@ -131,15 +138,15 @@ org_id（由依赖从路径注入，handler 不重复声明）
 - **server_default 取回**：MySQL 无 RETURNING，创建组织 / 添加成员后必须 `db.refresh()` 才能拿到 `created_at` / `joined_at`，否则响应时间戳为 null。
 - **添加成员**：admin 授予 admin → `ROLE_NOT_ASSIGNABLE`；目标用户不存在 → 复用 `USER_NOT_FOUND`；已在组织 → 预查 409 + `IntegrityError` 兜底（并发下唯一约束兜底）。响应手工构造（新建的 membership 未预加载 `user` relationship，不能走 `_member_response`）。
 - **改角色**（非转让）`_change_role`：改自己 → `SELF_ROLE_CHANGE_FORBIDDEN`；目标是 owner → `OWNER_MUST_TRANSFER`；admin 改 admin → `MEMBER_MANAGE_FORBIDDEN`；admin 授予 admin → `ROLE_NOT_ASSIGNABLE`。
-- **转让** `_transfer`：仅 owner（否则 `OWNER_REQUIRED`）；不能转让给自己（`SELF_ROLE_CHANGE_FORBIDDEN`）；目标已是 owner → `ROLE_NOT_ASSIGNABLE`。事务内三处同步：目标升 owner、调用者降 admin、`organizations.owner_id` 更新（D4/D5 落点）。
+- **转让** `_transfer`：仅 owner（否则 `OWNER_REQUIRED`）；不能转让给自己（`SELF_ROLE_CHANGE_FORBIDDEN`）；目标已是 owner → `ROLE_NOT_ASSIGNABLE`。事务内三处同步：目标升 owner、调用者降 member、`organizations.owner_id` 更新（D4/D5 落点）。
 - **移除** `remove_member`：目标是 owner → 自己 `OWNER_CANNOT_LEAVE`、他人 `OWNER_CANNOT_BE_REMOVED`；admin 移除 admin → `MEMBER_MANAGE_FORBIDDEN`。
-- **email 过滤**：`user_id IN (select users.id where email like %xx%)` 子查询，不显式 join `users`——避免与 `selectinload(OrganizationMember.user)` 产生加载冲突。
+- **搜索过滤**：`user_id IN (select users.id where email like %xx% OR username like %xx%)` 子查询，不显式 join `users`——避免与 `selectinload(OrganizationMember.user)` 产生加载冲突。
 - 创建 / 转让 / 解散均为单事务（沿用 `session.commit()` 模式），不做部分提交。
 
 ### 2.6 测试体系
 
 - 位置：`backend/tests/test_organization.py`，沿用 auth 的 conftest 模式（测试库自动建库迁移、`dependency_overrides`、每用例清空业务表）
-- 23 个用例覆盖：创建与校验（422）、组织列表/详情/me 联动、组织不存在 404、非成员 403、改名权限、添加成员（成功/未知用户 404/重复 409/非法角色 422）、member 越权 403、admin 授予 admin 403、邮箱过滤、改角色与 admin 管理边界、自己改自己 403、转让（成功 + owner_id 同步 + 旧 owner 降 admin）、转让拒绝矩阵（member 403 / admin OWNER_REQUIRED / 非成员 404 / 转让给自己 403）、移除（owner 保护 / admin 边界 / 重复移除 404）、退出、owner 不能退出、解散（越权 403 + 双方列表清空）
+- 组织接口测试覆盖：创建与校验、组织列表/详情/me 联动、跨组织拒绝、改名、添加/搜索/改角色/移除成员、owner 转让后旧 owner 降 member、admin 同级限制、退出与解散，以及头像上传/读取/移除、viewer 写拒绝、非正方形图片拒绝。
 - 全量回归：`pytest`（当前 39 passed，含 auth 16 例）
 
 ## 3. 前端实现
@@ -149,6 +156,7 @@ org_id（由依赖从路径注入，handler 不重复声明）
 ```
 frontend/src/
 ├─ api/organizations.ts              # organizationApi（api/index.ts 追加导出）
+├─ components/organization/OrganizationAvatar.tsx # 组织头像与首字兜底（API 授权拉取 Blob）
 ├─ types/organization.ts             # OrgRole / AssignableRole / 各请求响应类型（index.ts 追加导出）
 ├─ constants/routes.ts               # 追加 ROUTE_PATHS 与 orgMembersPath / orgSettingsPath 工具
 ├─ constants/org-roles.ts            # ORG_ROLE_LABELS 中文文案 + ASSIGNABLE_ROLES
@@ -182,20 +190,20 @@ RequireAuth
 ```
 
 - 侧边栏：Logo、组织切换器、导航（概览 / 我的组织 / 组织设置 / 成员管理）、底部用户信息与退出。无组织时「组织设置 / 成员管理」置灰并引导创建。
-- `OrgSwitcher` 回落 effect：组织列表到达后，若 `currentOrgId` 已不在列表中（被解散/退出）则回落第一个组织；列表为空则置 null。切换组织时若停留在 `/:orgId/*` 详情页，自动 navigate 到新组织的同路径页面。
+- `OrgSwitcher` 回落 effect：组织列表到达后，若 `currentOrgId` 已不在列表中（被解散/退出）则回落第一个组织；列表为空则置 null。切换组织时若停留在 `/:orgId/*` 详情页，自动 navigate 到新组织的同路径页面。组织头像通过带 Token 的 API 请求读取，不使用裸 `<img src>` 泄漏到公开静态路由。
 
 ### 3.4 页面交互要点
 
 | 页面 | 交互 |
 | --- | --- |
 | Home 概览 | 当前组织卡片（名称/拥有者/成员数/我的角色）+ 快捷入口；无组织时引导创建 |
-| List | 组织卡片网格（角色徽章）+ 「创建组织」表单卡片；创建成功 → 切换 currentOrgId → 跳成员管理页 |
-| Members | 搜索框（email 受控输入，变化即重新查询）；「添加成员」内联表单（RHF+zod）；行内角色下拉即时 PATCH；操作列按权限渲染「移除 / 退出组织」（`window.confirm` 确认） |
-| Settings | 基本信息卡 + 改名表单（owner/admin 可见）；危险区（仅 owner）：转让（成员下拉 + 确认）、解散（输入组织名匹配才可提交） |
+| List | “我的组织”作为全员浏览/切换入口；名称搜索、“我加入的/我管理的”筛选；组织头像、角色徽章与管理入口；所有角色进入工作区，非 owner 可退出，owner 可转让/解散；创建成功 → 切换 currentOrgId → 跳成员管理页 |
+| Members | 管理角色可访问；名称/邮箱受控搜索；“添加成员”内联表单；admin 只能授予 member/viewer；行内角色下拉即时 PATCH；移除与退出需确认 |
+| Settings | 管理角色可访问；头像上传（客户端 1:1 中心裁剪预览、服务端再校验）、替换和移除；改名（owner/admin）；危险区（仅 owner）：转让后降 member、解散（输入组织名匹配才可提交） |
 
 - 前端角色可见性由两个纯函数收敛（`pages/organizations/Members.tsx`）：`canAssignRole`（目标非自己、非 owner；admin 不能管理 admin）与 `canRemove`（目标非 owner；admin 不可移除 admin），与后端权限矩阵保持一致（后端为准）。
 - 表单校验沿用 RHF + zod（组织名 1–100、邮箱格式），与后端 `schemas/organization.py` 同步；错误文案透传后端中文 message（`errorMessage()` 兜底网络异常）。
-- 添加成员的角色选项：`ASSIGNABLE_ROLES = ['admin','member','viewer']`（不含 owner）；行内角色下拉选项按调用者角色收敛（owner 见三种，admin 见 member/viewer 两种）。
+- 添加成员的角色选项按调用者角色收敛：owner 可选 admin/member/viewer；admin 仅可选 member/viewer；行内角色下拉遵守相同层级规则。member/viewer 不显示组织管理入口，后端成员列表接口同样拒绝其访问。
 
 ## 4. 关键流程时序
 
@@ -220,7 +228,7 @@ RequireAuth
 **4.4 owner 转让**
 
 1. Settings 选择目标成员 → 确认 → `PATCH .../members/{uid}` `{role:"owner"}`
-2. 后端 `_transfer`：owner 校验 → 目标升 owner、调用者降 admin、`organization.owner_id` 同步 → commit
+2. 后端 `_transfer`：owner 校验 → 目标升 owner、调用者降 member、`organization.owner_id` 同步 → commit
 3. 前端 invalidate `['auth','me']`（自己角色已变）+ 成员 + 组织详情 + 组织列表，清空转让选择
 
 **4.5 移除成员 / 本人退出**

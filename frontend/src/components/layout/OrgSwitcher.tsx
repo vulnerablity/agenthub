@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ROUTE_PATHS } from '@/constants/routes'
 import { useMyOrganizations } from '@/hooks/useMyOrganizations'
 import { useOrganizationStore } from '@/stores/organization'
+// import OrganizationAvatar from '@/components/organization/OrganizationAvatar'
 
 export default function OrgSwitcher() {
   const navigate = useNavigate()
@@ -49,8 +50,18 @@ export default function OrgSwitcher() {
     )
   }
 
+  // const currentOrg = organizations.find((org) => org.id === currentOrgId)
   return (
-    <select
+    <div className="flex min-w-0 items-center gap-2">
+      {/* {currentOrg ? (
+        <OrganizationAvatar
+          name={currentOrg.name}
+          avatarUrl={currentOrg.avatar_url}
+          organizationId={currentOrg.id}
+          size="sm"
+        />
+      ) : null} */}
+      <select
       value={currentOrgId ?? undefined}
       onChange={(e) => handleChange(Number(e.target.value))}
       className="sb-select"
@@ -60,6 +71,7 @@ export default function OrgSwitcher() {
           {org.name}
         </option>
       ))}
-    </select>
+      </select>
+    </div>
   )
 }

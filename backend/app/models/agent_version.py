@@ -33,6 +33,14 @@ class AgentVersion(Base):
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    # 供应商路由真源（model-providers.md D2）：NULL = 回落全局 LLM_API_BASE/KEY；
+    # model_provider 为展示快照（建版本时写入供应商名，D3）
+    provider_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("model_providers.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=True,
+    )
     model_provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     temperature: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -98,7 +98,16 @@ def _fake_chat(deltas, usage=None, error_after=None):
     """假 LLM 流：按序产出 delta，收尾 usage（可流中抛错）"""
 
     async def chat_stream(
-        self, *, messages, model, temperature=None, max_tokens=None, tools=None
+        self,
+        *,
+        messages,
+        model,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        base_url=None,
+        api_key=None,
+        stream_usage=True,
     ):
         for delta in deltas:
             yield {"delta": delta}
@@ -117,7 +126,16 @@ def _fake_tool_loop(rounds):
     queue = list(rounds)
 
     async def chat_stream(
-        self, *, messages, model, temperature=None, max_tokens=None, tools=None
+        self,
+        *,
+        messages,
+        model,
+        temperature=None,
+        max_tokens=None,
+        tools=None,
+        base_url=None,
+        api_key=None,
+        stream_usage=True,
     ):
         spec = queue.pop(0)
         for delta in spec.get("deltas", []):

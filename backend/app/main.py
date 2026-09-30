@@ -1,5 +1,6 @@
 # main.py
 # 应用入口：装配 CORS、统一业务异常处理与 /api/v1 路由；lifespan 启动知识库文档处理 worker
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,9 +12,18 @@ from app.core.config import settings
 from app.core.exceptions import AppError
 from app.services.document_worker import get_worker
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # ENCRYPTION_KEY 未配置软告警（model-providers.md D14）：允许启动，供应商密钥功能不可用
+    if not settings.ENCRYPTION_KEY:
+        logger.warning(
+            "ENCRYPTION_KEY 未配置：模型供应商 api_key 功能不可用"
+            '（生成：python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"）'
+        )
     # 启动：恢复中断的文档任务并拉起消费循环（knowledge.md 3.4 重启恢复）
     await get_worker().start()
     yield

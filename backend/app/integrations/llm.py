@@ -32,16 +32,23 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         tools: list[dict] | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        stream_usage: bool = True,
     ) -> AsyncIterator[dict]:
         """逐条产出：{"delta": str} 内容片段 / {"tool_calls": [...]} 该轮工具调用（如有）
         / 收尾 {"usage": {...} | None}（上游不支持 usage 时为空）
-        tools 非空时启用 function calling（tool_choice=auto，tool-calling.md 2.5）"""
+        tools 非空时启用 function calling（tool_choice=auto，tool-calling.md 2.5）
+        base_url / api_key：Agent 绑定的供应商凭证（model-providers.md D2），
+        None = 回落全局 LLM_API_BASE / LLM_API_KEY（旧行为）；
+        stream_usage：上游不支持 stream_options（如 Ollama 旧版，D9）时传 False 不携带该字段"""
         payload: dict = {
             "model": model,
             "messages": messages,
             "stream": True,
-            "stream_options": {"include_usage": True},
         }
+        if stream_usage:
+            payload["stream_options"] = {"include_usage": True}
         if temperature is not None:
             payload["temperature"] = temperature
         if max_tokens is not None:
@@ -51,10 +58,12 @@ class LLMClient:
             payload["tool_choice"] = "auto"
 
         headers = {"Content-Type": "application/json"}
-        if settings.LLM_API_KEY:
-            headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
+        # 供应商密钥优先（None = 未指定供应商，回落全局配置，D2）
+        key = api_key if api_key is not None else settings.LLM_API_KEY
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
 
-        url = settings.LLM_API_BASE.rstrip("/") + "/chat/completions"
+        url = (base_url or settings.LLM_API_BASE).rstrip("/") + "/chat/completions"
         try:
             async with self._client.stream(
                 "POST", url, json=payload, headers=headers

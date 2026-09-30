@@ -13,9 +13,18 @@ from app.core.exceptions import (
     AgentVersionConflict,
     AgentVersionNotFound,
     KnowledgeBaseNotFound,
+    ModelProviderModelDisabled,
+    ModelProviderNotFound,
     RAGConfigInvalid,
 )
-from app.models import Agent, AgentVersion, Organization, User
+from app.models import (
+    Agent,
+    AgentVersion,
+    ModelProvider,
+    Organization,
+    ProviderModel,
+    User,
+)
 from app.repositories.agent_repo import AgentRepository
 from app.repositories.knowledge_repo import KnowledgeRepository
 from app.schemas.agent import (
@@ -44,6 +53,10 @@ class AgentService:
         if await self.repo.name_exists(org.id, data.name):
             raise AgentNameConflict()
         config_json = await self._normalize_rag_binding(org, data.config_json)
+        # 供应商绑定校验（model-providers.md D12）+ 展示快照赋值（D3）
+        provider = await self._validate_provider_binding(
+            org, data.provider_id, data.model_name
+        )
         agent = await self.repo.create(
             Agent(
                 organization_id=org.id,
@@ -59,7 +72,8 @@ class AgentService:
                 agent_id=agent.id,
                 version=1,
                 system_prompt=data.system_prompt,
-                model_provider=data.model_provider,
+                provider_id=provider.id if provider else None,
+                model_provider=provider.name if provider else data.model_provider,
                 model_name=data.model_name,
                 temperature=data.temperature,
                 max_tokens=data.max_tokens,
@@ -77,6 +91,12 @@ class AgentService:
             await self.db.commit()
         except IntegrityError as exc:
             await self.db.rollback()
+            # 并发删除供应商的 FK 冲突 → 404（model-providers.md D7）；其余按名称冲突处理
+            if (
+                provider is not None
+                and await self.db.get(ModelProvider, provider.id) is None
+            ):
+                raise ModelProviderNotFound() from exc
             raise AgentNameConflict() from exc
         return await self._detail(agent, version)
 
@@ -177,12 +197,18 @@ class AgentService:
             agent = await self._get_in_org(org, agent_id, for_update=True)
             next_number = await self.repo.next_version_number(agent.id)
             config_json = await self._normalize_rag_binding(org, data.config_json)
+            # 供应商绑定校验随重试进入循环（model-providers.md D12/D7）：
+            # 并发删除供应商时下一轮预检直接 404，而非 FK 异常重试耗尽
+            provider = await self._validate_provider_binding(
+                org, data.provider_id, data.model_name
+            )
             version = await self.repo.create_version(
                 AgentVersion(
                     agent_id=agent.id,
                     version=next_number,
                     system_prompt=data.system_prompt,
-                    model_provider=data.model_provider,
+                    provider_id=provider.id if provider else None,
+                    model_provider=provider.name if provider else data.model_provider,
                     model_name=data.model_name,
                     temperature=data.temperature,
                     max_tokens=data.max_tokens,
@@ -227,6 +253,34 @@ class AgentService:
         if agent is None or agent.organization_id != org.id:
             raise AgentNotFound()
         return agent
+
+    async def _validate_provider_binding(
+        self, org: Organization, provider_id: int | None, model_name: str
+    ) -> ModelProvider | None:
+        """供应商绑定校验（model-providers.md D12，仅版本创建时生效）：
+
+        - provider_id 为空 → None（走全局 LLM_API_BASE，不做模型校验）
+        - 供应商不存在或不属于当前组织 → 404（防泄漏）
+        - (provider_id, model_name) 命中禁用模型行 → 422 MODEL_PROVIDER_MODEL_DISABLED
+        - 未命中任何行 → 放行（自定义模型兜底，能力按 D4 默认值）
+        - 不校验「模型属于其他供应商」：model_key 命名空间按供应商隔离
+        """
+        if provider_id is None:
+            return None
+        provider = await self.db.get(ModelProvider, provider_id)
+        if provider is None or provider.organization_id != org.id:
+            raise ModelProviderNotFound()
+        model_row = (
+            await self.db.execute(
+                select(ProviderModel).where(
+                    ProviderModel.provider_id == provider.id,
+                    ProviderModel.model_key == model_name,
+                )
+            )
+        ).scalar_one_or_none()
+        if model_row is not None and not model_row.enabled:
+            raise ModelProviderModelDisabled()
+        return provider
 
     async def _normalize_rag_binding(
         self, org: Organization, config_json: dict | None
@@ -300,6 +354,7 @@ class AgentService:
             id=version.id,
             version=version.version,
             system_prompt=version.system_prompt,
+            provider_id=version.provider_id,
             model_provider=version.model_provider,
             model_name=version.model_name,
             temperature=version.temperature,

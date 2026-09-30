@@ -32,6 +32,7 @@ pwdlib==0.3.1 # 密码哈希
 pycparser==3.0
 pydantic==2.13.5 # 数据校验
 pydantic-settings==2.15.0 # .env 配置
+Pillow==12.1.1 # 组织头像图片校验与规范化
 pydantic_core==2.46.5
 Pygments==2.21.0
 PyJWT==2.14.0 # JWT

@@ -51,13 +51,16 @@ export default function Members() {
   const queryClient = useQueryClient()
   const { data: me } = useMe()
   const { data: org } = useOrg(orgId)
-  const [email, setEmail] = useState('')
-  const { data: members, isPending } = useOrgMembers(orgId, email)
+  const [search, setSearch] = useState('')
+  const { data: members, isPending } = useOrgMembers(orgId, search)
   const [apiError, setApiError] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
 
   const myRole = org?.my_role
   const canManage = myRole === 'owner' || myRole === 'admin'
+  const assignableRoles = myRole === 'owner'
+    ? ASSIGNABLE_ROLES
+    : ASSIGNABLE_ROLES.filter((role) => role !== 'admin')
 
   const {
     register: registerAdd,
@@ -72,7 +75,7 @@ export default function Members() {
   /** 成员/组织数据联动刷新（成员数与角色影响组织详情与列表） */
   const refreshOrgData = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: orgMembersQueryKey(orgId ?? 0, email) }),
+      queryClient.invalidateQueries({ queryKey: orgMembersQueryKey(orgId ?? 0, search) }),
       queryClient.invalidateQueries({ queryKey: orgQueryKey(orgId ?? 0) }),
       queryClient.invalidateQueries({ queryKey: MY_ORGS_QUERY_KEY }),
     ])
@@ -110,6 +113,7 @@ export default function Members() {
   if (orgId == null || Number.isNaN(orgId)) {
     return <p className="muted">组织参数无效</p>
   }
+  if (org && !canManage) return <p className="muted">没有组织成员管理权限</p>
 
   const onAdd = handleAddSubmit((values) => {
     setApiError('')
@@ -177,7 +181,7 @@ export default function Members() {
                 角色
               </label>
               <select id="add-role" className="select" {...registerAdd('role')}>
-                {ASSIGNABLE_ROLES.map((role) => (
+                {assignableRoles.map((role) => (
                   <option key={role} value={role}>
                     {ORG_ROLE_LABELS[role]}
                   </option>
@@ -202,9 +206,9 @@ export default function Members() {
           <Icon name="search" className="ic" />
           <input
             type="search"
-            placeholder="按邮箱搜索成员…"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            placeholder="按名称或邮箱搜索成员…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
@@ -232,7 +236,7 @@ export default function Members() {
                   <tr key={m.user_id}>
                     <td>
                       <div className="flex items-center gap-3">
-                        <span className={`avatar sm ${avatarTone(m.email)}`}>
+                        <span className={`avatar sm ${avatarTone(m.email)} user-av`}>
                           {(m.username || m.email).slice(0, 1).toUpperCase()}
                         </span>
                         <div>
@@ -292,7 +296,7 @@ export default function Members() {
         ) : (
           <div className="empty" style={{ padding: '40px 16px' }}>
             <Icon name="users" className="ic" />
-            <p>{email ? '没有匹配的成员' : '暂无成员'}</p>
+            <p>{search ? '没有匹配的成员' : '暂无成员'}</p>
           </div>
         )}
       </div>

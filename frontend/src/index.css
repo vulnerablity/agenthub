@@ -207,7 +207,7 @@ a {
   font-size: 10.5px;
   font-weight: 600;
   color: #ffffff;
-  background: #ffffff8a;
+  background: #007fff;
   padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;
@@ -693,12 +693,17 @@ a {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  color: #fff;
   font-weight: 700;
   flex-shrink: 0;
   user-select: none;
 }
-.av-1 {
+.user-avatar{
+  color:#4b5563;
+}
+.org-avatar{
+  color:#1d4ed8;
+}
+/* .av-1 {
   background: linear-gradient(135deg, #5b5bd6, #8b5cf6);
 }
 .av-2 {
@@ -715,6 +720,12 @@ a {
 }
 .av-6 {
   background: linear-gradient(135deg, #64748b, #334155);
+} */
+.user-av{
+  background:#e5e7eb;
+}
+.org-av{
+  background:#dbeafe;
 }
 .avatar.sm {
   width: 26px;

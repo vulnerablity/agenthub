@@ -24,12 +24,23 @@ export const organizationApi = {
   update(orgId: number, data: OrganizationUpdateRequest) {
     return http.patch<OrganizationDetail>(`/organizations/${orgId}`, data)
   },
+  uploadAvatar(orgId: number, file: File) {
+    const body = new FormData()
+    body.append('file', file)
+    return http.put<OrganizationDetail>(`/organizations/${orgId}/avatar`, body)
+  },
+  getAvatar(orgId: number) {
+    return http.get<Blob>(`/organizations/${orgId}/avatar`, { responseType: 'blob' })
+  },
+  removeAvatar(orgId: number) {
+    return http.delete(`/organizations/${orgId}/avatar`)
+  },
   remove(orgId: number) {
     return http.delete(`/organizations/${orgId}`)
   },
-  listMembers(orgId: number, email?: string) {
+  listMembers(orgId: number, search?: string) {
     return http.get<MemberResponse[]>(`/organizations/${orgId}/members`, {
-      params: email ? { email } : undefined,
+      params: search ? { search } : undefined,
     })
   },
   addMember(orgId: number, data: MemberAddRequest) {

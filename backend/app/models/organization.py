@@ -17,6 +17,7 @@ class Organization(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    avatar_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     owner_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id"), nullable=False
     )
