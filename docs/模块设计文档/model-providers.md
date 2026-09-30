@@ -204,6 +204,8 @@ async for item in get_llm_client().chat_stream(
 | `src/pages/model-providers/List.tsx` | 供应商卡片/表格：名称、类型、base_url、key 掩码、启停；owner/admin 显示管理按钮 |
 | `src/pages/model-providers/Form.tsx` | 新建/编辑：类型选择（命中目录自动带出模型清单；免密类型隐藏 key 输入）+ base_url + api_key（编辑留空不改、清空按钮仅免密类型显示）+ 「测试连接」（可填 model_key，展示 ok/latency/error_type 中文文案） |
 | `src/pages/agents/VersionForm.tsx` | **两级下拉**：供应商（首项「全局默认」= 不传 provider_id）→ 联动渲染该供应商 enabled 模型；支持下拉选择 + 手动输入兜底（datalist 风格，自定义模型直填 model_name，**旁注「未登记模型按默认能力处理」**）；提交 `provider_id + model_name` |
+| `src/pages/agents/Form.tsx` | **创建智能体同样支持两级选择**（创建态，与 VersionForm 同构）：供应商下拉（首项「全局默认」= 不传 provider_id）→ 该供应商 enabled 模型下拉 / 自定义兜底；选中供应商时 Provider 输入框显示名称快照（readOnly）；提交 `provider_id + model_name`，后端 `create_agent` 按 D12 校验并绑定到自动生成的 v1（全局默认不传，兼容旧流程） |
+| `types/agent.ts` | `AgentCreateRequest` 增加 `provider_id?: number \| null`（缺省 = 全局默认，与 `AgentVersionCreateRequest` 对齐）；`Form.tsx` 的 `buildCreatePayload` 据此携带绑定 |
 | `src/constants/agent-options.ts` | `PROVIDER_OPTIONS` 常量标记 deprecated（仅旧版本展示回落），新增 `canManageProvider(role)` 复用 canManageAgent 判定 |
 | `router/index.ts` | `MODEL_PROVIDERS` / `MODEL_PROVIDERS_NEW`（**NEW 声明在 :id 之前**，KB 路由教训）/ `MODEL_PROVIDERS_EDIT` |
 | `types/model_provider.ts` | Provider / ProviderModel / Capabilities 类型 |

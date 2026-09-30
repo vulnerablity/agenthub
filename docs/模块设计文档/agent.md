@@ -17,7 +17,7 @@
 | D1 | 名称组织内唯一（1–100 字符），不做全局唯一 | `uq_agent_name(organization_id, name)` 保证；需求未约束，属实现细节 |
 | D2 | 模型配置与提示词**版本化存储**（需求 4.5 agent_versions） | agents 表仅存基础信息 + `current_version_id`（需求 4.4）；创建即产生 v1 并发布 |
 | D3 | 编辑语义拆分：PATCH 仅改基础信息；模型/Prompt 变更走「新建版本 → 发布」 | 对应需求 3.3「编辑支持修改描述/模型/Prompt」+ 3.4 版本化 |
-| D4 | provider / model 为自由文本（仅长度校验），V1 不做 LLM 连通性测试 | 需求未枚举 provider；网关接入由聊天模块统一约束 |
+| D4 | provider / model 后端仍为自由文本（String，仅长度校验）；模型供应商模块落地后，创建/版本表单提供**供应商两级选择**并可选绑定 `provider_id`（路由真源，见 model-providers.md D2/D12），连通性由该模块「测试连接」提供 | 需求未枚举 provider；网关接入由聊天模块统一约束 |
 | D5 | 启停即时生效、不删除配置：`status ∈ {enabled, disabled}` | 需求 3.3 创建字段含「状态」；创建可指定，默认 enabled |
 | D6 | 删除为硬删除，版本随外键 `ON DELETE CASCADE` 级联清理 | 需求未定义级联；chat/日志模块落地后复审 |
 | D7 | 列表 V1 全量 + `name` 模糊 + `status` 过滤，不分页 | 需求 3.3 列表仅定义展示字段，未要求分页 |
@@ -128,7 +128,7 @@ X-Organization-Id 头缺失 / 非数字 → 403 FORBIDDEN（不泄露组织存�
 
 | 接口 | 成功 | 权限（依赖别名） | 关键实现点 |
 | --- | --- | --- | --- |
-| `POST /agents` `{name, description?, avatar_url?, status?, system_prompt?, model_provider, model_name, temperature?, max_tokens?, config_json?}` | 201 `AgentDetail` | AdminCtx | 事务：建 agent + 建 v1 + 指向 current_version_id；见 2.5 |
+| `POST /agents` `{name, description?, avatar_url?, status?, system_prompt?, model_provider, model_name, provider_id?, temperature?, max_tokens?, config_json?}` | 201 `AgentDetail` | AdminCtx | 事务：建 agent + 建 v1（provider_id 非空按 D12 校验供应商归属与模型禁用态，快照 model_provider 为供应商名）+ 指向 current_version_id；见 2.5 |
 | `GET /agents` `?name=&status=` | 200 `AgentListItem[]` | OrgCtx | 批量映射 current_version_id → 版本号；V1 不分页 |
 | `GET /agents/{agent_id}` | 200 `AgentDetail` | OrgCtx | 含当前版本完整配置 `current_version_detail` |
 | `PATCH /agents/{agent_id}` `{name?, description?, avatar_url?}` | 200 `AgentDetail` | AdminCtx | 仅基础信息（D3）；可空字段 null 清空；name null → 422 |
@@ -221,7 +221,8 @@ RequireAuth
 
 **3.4.2 表单页 Form.tsx（创建 / 编辑共用）**
 
-- 创建态：左栏三分区表单（基础信息：名称/描述/头像/状态 + 模型配置：Provider/模型/Temperature 滑块/Max Tokens + 系统提示词）+ 右栏 sticky 实时预览卡；提交即创建并自动生成 v1 发布
+- 创建态：左栏三分区表单（基础信息：名称/描述/头像/状态 + 模型配置 + 系统提示词）+ 右栏 sticky 实时预览卡；提交即创建并自动生成 v1 发布
+- 模型配置（model-providers.md §9）：**供应商两级选择**——第一级「模型供应商」下拉（首项「全局默认」= 不绑定，走平台 LLM_API_BASE；仅列出 enabled 供应商），第二级联动该供应商**启用模型**下拉（未登记模型可选「自定义模型」手动直填 model_name，旁注「未登记模型按默认能力处理」）；选中供应商时 Provider 输入框显示名称快照（readOnly），提交携带 `provider_id + model_name`，后端 `create_agent` 按 D12 校验并绑定（全局默认不传 provider_id，兼容旧流程）
 - 编辑态：仅基础信息单列表单（D3：模型与提示词走版本页），保存后回详情
 - 校验 RHF + zod（与后端 schema 同步）；模型配置必填在创建态由 `setError` 收敛
 
@@ -254,7 +255,7 @@ RequireAuth
 
 **4.1 创建智能体（含 v1 发布）**
 
-1. List「新建」→ Form 创建态校验 → `POST /agents`（头带 X-Organization-Id）
+1. List「新建」→ Form 创建态校验 → 模型配置经供应商两级选择（可选绑定 provider_id，全局默认不传）→ `POST /agents`（头带 X-Organization-Id）
 2. 后端：AdminCtx → 名称冲突预查 → 事务建 agent + v1 → 显式 flush 指向 current_version_id → refresh → commit
 3. 前端 invalidate 列表 → 跳详情页（展示当前版本 v1）
 

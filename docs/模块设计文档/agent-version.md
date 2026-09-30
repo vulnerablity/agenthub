@@ -71,6 +71,7 @@ backend/
 | `version` | Integer | not null | 序号从 1 递增；`uq_agent_version_seq(agent_id, version)` 唯一 |
 | `system_prompt` | TEXT | not null | 需求 4.5；无 DB 默认值（MySQL TEXT 不支持字面量 server_default），非空由 schema 默认 `""` 保证 |
 | `model_provider` | VARCHAR(50) | not null | 自由文本，仅长度校验 |
+| `provider_id` | BigInteger | FK→`model_providers.id`, nullable, `ondelete=RESTRICT` | 供应商路由真源（model-providers.md D2）；NULL = 回落全局 `LLM_API_BASE`；索引 `ix_agent_versions_provider_id` |
 | `model_name` | VARCHAR(100) | not null | 同上 |
 | `temperature` | FLOAT | nullable | null = 运行时默认 |
 | `max_tokens` | Integer | nullable | null = 运行时默认 |
@@ -117,6 +118,7 @@ backend/
 | `system_prompt` | 默认 `""`，≤10000 字符 |
 | `model_provider` | 必填，1–50 字符 |
 | `model_name` | 必填，1–100 字符 |
+| `provider_id` | 可选，绑定供应商 id（缺省 = 全局默认；按 model-providers.md D12 校验） |
 | `temperature` | 可选，0–2 |
 | `max_tokens` | 可选，1–100000 |
 | `config_json` | 可选字典 |
@@ -234,7 +236,7 @@ frontend/src/
 
 **4.5 创建智能体初始 v1（交集，详见 agent.md 4.1）**
 
-1. `POST /agents` → 事务：建 agent → 建 v1（version=1）→ 指向 `current_version_id` → 显式 flush → refresh → commit
+1. `POST /agents` → 事务：建 agent → 建 v1（version=1，模型配置来自创建表单：供应商两级选择可选绑定 `provider_id`，全局默认不传；`model_provider` 为名称快照）→ 指向 `current_version_id` → 显式 flush → refresh → commit
 
 ## 5. 错误码对照表
 
