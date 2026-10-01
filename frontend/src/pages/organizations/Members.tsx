@@ -236,7 +236,7 @@ export default function Members() {
                   <tr key={m.user_id}>
                     <td>
                       <div className="flex items-center gap-3">
-                        <span className={`avatar sm ${avatarTone(m.email)} user-av`}>
+                        <span className={`avatar sm ${avatarTone(m.email)} user-av user-avatar`}>
                           {(m.username || m.email).slice(0, 1).toUpperCase()}
                         </span>
                         <div>

@@ -23,6 +23,10 @@ interface MessageBubbleProps {
   sources?: RAGSource[] | null
   /** 工具调用轨迹（仅助手消息展示；来自 metadata_json.tool_calls 或流式中的 tool_call 事件） */
   toolCalls?: ToolCallView[] | null
+  /** 消息时间（助手消息底部展示，流式中不展示） */
+  time?: string | null
+  /** 智能体名（助手消息底部展示） */
+  agentName?: string | null
 }
 
 export default function MessageBubble({
@@ -31,10 +35,13 @@ export default function MessageBubble({
   streaming,
   sources,
   toolCalls,
+  time,
+  agentName,
 }: MessageBubbleProps) {
   const isUser = role === 'user'
   const showSources = !isUser && !streaming && sources != null && sources.length > 0
   const showTools = !isUser && toolCalls != null && toolCalls.length > 0
+  const showMeta = !isUser && !streaming && (time != null || agentName != null)
   return (
     <div className={`msg-row ${isUser ? 'user' : 'ai'}`}>
       <div className={isUser ? 'bubble-user' : 'bubble-ai'}>
@@ -97,6 +104,12 @@ export default function MessageBubble({
           </div>
         ) : null}
       </div>
+      {showMeta ? (
+        <div className="msg-meta">
+          {time != null ? <span className="meta-time">{time}</span> : null}
+          {agentName != null ? <span className="meta-agent">· {agentName}</span> : null}
+        </div>
+      ) : null}
     </div>
   )
 }

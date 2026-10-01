@@ -163,8 +163,8 @@ class Settings(BaseSettings):
             except (ValueError, TypeError) as exc:
                 raise ValueError(
                     "ENCRYPTION_KEY 不是合法的 Fernet 密钥"
-                    '（生成：python -c "from cryptography.fernet import Fernet; '
-                    'print(Fernet.generate_key().decode())"）'
+                    "（生成：python -c \"from cryptography.fernet import Fernet; "
+                    "print(Fernet.generate_key().decode())\"）"
                 ) from exc
         return self
 

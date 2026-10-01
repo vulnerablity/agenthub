@@ -17,9 +17,7 @@ def validate_provider_url(url: str) -> None:
     if parsed.scheme not in ("https", "http"):
         raise ProviderUrlForbidden(f"不支持的协议 {parsed.scheme or '(空)'}")
     if parsed.scheme == "http" and not allow_private:
-        raise ProviderUrlForbidden(
-            "仅允许 https 地址（自建内网部署可开启 ALLOW_PRIVATE_PROVIDER_URL）"
-        )
+        raise ProviderUrlForbidden("仅允许 https 地址（自建内网部署可开启 ALLOW_PRIVATE_PROVIDER_URL）")
     host = parsed.hostname
     if not host:
         raise ProviderUrlForbidden("地址缺少主机名")

@@ -71,7 +71,9 @@ async def import_preset(db: AsyncSession, provider: ModelProvider) -> int:
     if not presets:
         return 0
     result = await db.execute(
-        select(ProviderModel.model_key).where(ProviderModel.provider_id == provider.id)
+        select(ProviderModel.model_key).where(
+            ProviderModel.provider_id == provider.id
+        )
     )
     known = set(result.scalars().all())
     default_caps = provider_type_default_capabilities(provider.provider_type)

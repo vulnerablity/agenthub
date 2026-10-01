@@ -17,14 +17,7 @@ from app.core.exceptions import (
     ModelProviderNotFound,
     RAGConfigInvalid,
 )
-from app.models import (
-    Agent,
-    AgentVersion,
-    ModelProvider,
-    Organization,
-    ProviderModel,
-    User,
-)
+from app.models import Agent, AgentVersion, ModelProvider, Organization, ProviderModel, User
 from app.repositories.agent_repo import AgentRepository
 from app.repositories.knowledge_repo import KnowledgeRepository
 from app.schemas.agent import (
@@ -92,10 +85,9 @@ class AgentService:
         except IntegrityError as exc:
             await self.db.rollback()
             # 并发删除供应商的 FK 冲突 → 404（model-providers.md D7）；其余按名称冲突处理
-            if (
-                provider is not None
-                and await self.db.get(ModelProvider, provider.id) is None
-            ):
+            if provider is not None and await self.db.get(
+                ModelProvider, provider.id
+            ) is None:
                 raise ModelProviderNotFound() from exc
             raise AgentNameConflict() from exc
         return await self._detail(agent, version)

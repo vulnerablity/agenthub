@@ -24,14 +24,14 @@ def upgrade() -> None:
         sa.Column("organization_id", sa.BigInteger(), nullable=False),
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column(
-            "provider_type",
-            sa.String(length=30),
-            server_default="custom",
+            "provider_type", sa.String(length=30), server_default="custom",
             nullable=False,
         ),
         sa.Column("base_url", sa.String(length=500), nullable=False),
         sa.Column("api_key_encrypted", sa.Text(), nullable=True),
-        sa.Column("enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column(
+            "enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False
+        ),
         sa.Column("created_by", sa.BigInteger(), nullable=False),
         sa.Column(
             "created_at",
@@ -60,7 +60,9 @@ def upgrade() -> None:
         sa.Column("model_key", sa.String(length=100), nullable=False),
         sa.Column("display_name", sa.String(length=100), nullable=False),
         sa.Column("capabilities", sa.JSON(), nullable=True),
-        sa.Column("enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column(
+            "enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -90,16 +92,22 @@ def upgrade() -> None:
         ["id"],
         ondelete="RESTRICT",
     )
-    op.create_index("ix_agent_versions_provider_id", "agent_versions", ["provider_id"])
+    op.create_index(
+        "ix_agent_versions_provider_id", "agent_versions", ["provider_id"]
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_agent_versions_provider_id", table_name="agent_versions")
+    op.drop_index(
+        "ix_agent_versions_provider_id", table_name="agent_versions"
+    )
     op.drop_constraint(
         "fk_agent_versions_provider", "agent_versions", type_="foreignkey"
     )
     op.drop_column("agent_versions", "provider_id")
     op.drop_index("ix_provider_models_provider_id", table_name="provider_models")
     op.drop_table("provider_models")
-    op.drop_index("ix_model_providers_organization_id", table_name="model_providers")
+    op.drop_index(
+        "ix_model_providers_organization_id", table_name="model_providers"
+    )
     op.drop_table("model_providers")

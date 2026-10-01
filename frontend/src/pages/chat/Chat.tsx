@@ -1,12 +1,17 @@
 // pages/chat/Chat.tsx
-// 对话页（chat.md 3.3）：左侧会话列表 + 右侧消息区；无选中会话时为欢迎态（新建会话）
-// 流式消息为本地临时状态（不进 React Query），done/error 后失效缓存以服务端历史为准
+// 对话页（方案A重构）：左侧可折叠/可拖拽侧边栏 + 右侧对话面板
+// - 侧边栏：功能区「新建对话」+ 会话列表（只显示标题，hover 删除）；右上角收起按钮；面板头部可重新展开
+// - 拖拽分隔条调整比例，对话面板至少占一半（侧边栏宽度上限 = 容器一半）
+// - 方案A：未选中会话（欢迎态）时在输入框内选择智能体，发送时自动创建会话并进入，随后发送首条消息
+// - 流式消息为本地临时状态（不进 React Query），done/error 后失效缓存以服务端历史为准
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 
 import { conversationApi } from '@/api'
 import ChatInput from '@/components/chat/ChatInput'
+import Icon from '@/components/Icon'
 import MessageBubble from '@/components/chat/MessageBubble'
 import SessionList from '@/components/chat/SessionList'
 import { canChatAgent } from '@/constants/agent-options'
@@ -21,6 +26,10 @@ import { useOrg } from '@/hooks/useOrg'
 import type { MessageDetail, RAGSource } from '@/types'
 import type { ToolCallView } from '@/components/chat/MessageBubble'
 
+/** 侧边栏宽度约束：可拖拽范围 200px ~ 容器一半（保证对话面板 ≥ 50%） */
+const SIDEBAR_MIN = 200
+const SIDEBAR_DEFAULT = 300
+
 /** 乐观追加用户消息用的本地占位（负数 id 与服务端记录区分） */
 function localUserMessage(content: string): MessageDetail {
   return {
@@ -32,6 +41,13 @@ function localUserMessage(content: string): MessageDetail {
     metadata_json: null,
     created_at: new Date().toISOString(),
   }
+}
+
+/** 消息时间（主流样式：MM-DD HH:mm） */
+function formatTime(iso: string): string {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 /** 历史消息 metadata_json.tool_calls → 气泡工具轨迹视图（metadata 无结构保证，容错解析） */
@@ -68,6 +84,35 @@ export default function Chat() {
   const { data: agents } = useAgents(orgId, {})
   const { data: conversation } = useConversation(orgId, conversationId)
   const { data: history } = useConversationMessages(orgId, conversationId)
+
+  // ---------- 布局：侧边栏开关 + 拖拽分栏 ----------
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
+  const shellRef = useRef<HTMLDivElement>(null)
+
+  const startResize = (e: ReactMouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+    const onMove = (ev: MouseEvent) => {
+      const shell = shellRef.current
+      // 面板至少占一半 → 侧边栏宽度上限为容器一半
+      const max = shell ? Math.floor(shell.clientWidth / 2) : SIDEBAR_DEFAULT
+      setSidebarWidth(Math.max(SIDEBAR_MIN, Math.min(startWidth + ev.clientX - startX, max)))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+  }
+
+  // ---------- 方案A：欢迎态智能体选择 + 待发送内容 ----------
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
+  const pendingSendRef = useRef<string | null>(null)
 
   // 本地消息视图：历史 + 乐观用户气泡 + 流式助手气泡；缓存刷新后以服务端历史为准
   const [messages, setMessages] = useState<MessageDetail[]>([])
@@ -163,14 +208,27 @@ export default function Chat() {
     nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
   }
 
+  /** 真正发起流式：乐观上屏用户消息 + SSE 发送 */
+  const doSend = (content: string, cid: number) => {
+    setChatError(null)
+    deltaCountRef.current = 0
+    setLiveToolCalls([])
+    setMessages((prev) => [...prev, localUserMessage(content)])
+    send(content, cid)
+  }
+
+  /** 方案A：进入新创建的会话后，自动发送待发内容（等会话详情加载完成，避免乐观消息被历史重置清掉） */
+  useEffect(() => {
+    if (conversationId == null || conversation == null || pendingSendRef.current == null) return
+    const content = pendingSendRef.current
+    pendingSendRef.current = null
+    doSend(content, conversationId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, conversation])
+
   const createConversation = useMutation({
     mutationFn: async (agentId: number) =>
       (await conversationApi.create({ agent_id: agentId })).data,
-    onSuccess: (created) => {
-      setChatError(null)
-      queryClient.invalidateQueries({ queryKey: conversationsQueryKey(orgId ?? 0) })
-      navigate(chatConversationPath(orgId!, created.id))
-    },
     onError: (error) => setChatError(errorMessage(error)),
   })
 
@@ -198,182 +256,181 @@ export default function Chat() {
   const inputDisabled = !canChat || conversationAgent?.status !== 'enabled'
   const fallbackChatError = chatError ?? streamSendError
 
-  const handleSend = (content: string) => {
-    if (conversationId == null) return
+  const handleSend = async (content: string) => {
+    if (conversationId != null) {
+      doSend(content, conversationId)
+      return
+    }
+    // 方案A：未进入会话时，须先选择智能体；已选则创建会话并跳转，随后自动发送
+    // 创建进行中忽略重复点击（防重复建会话）
+    if (createConversation.isPending) return
+    if (selectedAgentId == null) {
+      setChatError('请先选择智能体')
+      return
+    }
     setChatError(null)
-    deltaCountRef.current = 0
-    setLiveToolCalls([])
-    setMessages((prev) => [...prev, localUserMessage(content)])
-    send(content)
+    try {
+      const created = await createConversation.mutateAsync(selectedAgentId)
+      pendingSendRef.current = content
+      queryClient.invalidateQueries({ queryKey: conversationsQueryKey(orgId ?? 0) })
+      navigate(chatConversationPath(orgId!, created.id))
+    } catch (error) {
+      setChatError(errorMessage(error))
+    }
   }
 
   return (
-    <div className="chat-shell">
-      <SessionList
-        conversations={conversations ?? []}
-        activeId={conversationId}
-        agents={enabledAgents}
-        creating={createConversation.isPending}
-        onSelect={(id) => navigate(chatConversationPath(orgId, id))}
-        onCreate={(agentId) => createConversation.mutate(agentId)}
-        onDelete={(id) => deleteConversation.mutate(id)}
-      />
+    <div className="chat-shell" ref={shellRef}>
+      {sidebarOpen ? (
+        <>
+          <div className="chat-side" style={{ width: sidebarWidth }}>
+            <SessionList
+              conversations={conversations ?? []}
+              activeId={conversationId}
+              onSelect={(id) => navigate(chatConversationPath(orgId, id))}
+              onDelete={(id) => deleteConversation.mutate(id)}
+              onNewChat={() => navigate(chatPath(orgId))}
+              onToggleSidebar={() => {setSidebarOpen(false)
+                setSidebarWidth(SIDEBAR_DEFAULT)
+              }}
+            />
+          </div>
+          <div className="chat-resizer" onMouseDown={startResize} title="拖动调整宽度" />
+        </>
+      ) : null}
 
       <div className="chat-main">
-        {conversation ? (
-          <>
-            <header className="chat-head">
-              {conversation.agent_avatar_url ? (
-                <img
-                  src={conversation.agent_avatar_url}
-                  alt=""
-                  className="avatar sm shrink-0 object-cover"
-                />
-              ) : (
-                <span className={`avatar sm ${avatarTone(conversation.agent_name)}`}>
-                  {conversation.agent_name.slice(0, 1).toUpperCase()}
-                </span>
-              )}
-              <h2 className="text-[14px] font-bold">{conversation.agent_name}</h2>
-              {conversationAgent?.status !== 'enabled' ? (
-                <span className="badge off">智能体已停用，无法继续对话</span>
-              ) : null}
-            </header>
+        <header className="chat-head">
+          {!sidebarOpen ? (
+            <button
+              type="button"
+              className="head-side-btn"
+              title="展开侧边栏"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Icon name="chat" className="ic" />
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="ch-title">
+            {conversation ? (
+              <>
+                {conversation.agent_avatar_url ? (
+                  <img
+                    src={conversation.agent_avatar_url}
+                    alt=""
+                    className="avatar sm shrink-0 object-cover"
+                  />
+                ) : (
+                  <span className={`avatar sm ${avatarTone(conversation.agent_name)}`}>
+                    {conversation.agent_name.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <h2 className="ch-name">{conversation.agent_name}</h2>
+                {conversationAgent?.status !== 'enabled' ? (
+                  <span className="badge off">智能体已停用，无法继续对话</span>
+                ) : null}
+              </>
+            ) : (
+              <h2 className="ch-name">请选择智能体</h2>
+            )}
+          </div>
+          <span />
+        </header>
 
-            <div ref={scrollRef} onScroll={handleScroll} className="msg-list">
-              {messages.length === 0 && !streaming ? (
-                <div className="welcome">
-                  <p className="text-[14px] font-semibold text-[var(--ink-1)]">
-                    开始与 {conversation.agent_name} 对话
-                  </p>
-                  <p className="mt-1 text-[12px] muted">
-                    基于该会话创建时绑定的版本配置进行回答
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {messages.map((message) => (
-                    <MessageBubble
-                      key={message.id}
-                      role={message.role}
-                      content={message.content}
-                      sources={
-                        message.role === 'assistant'
-                          ? (message.metadata_json?.sources as RAGSource[] | undefined)
-                          : undefined
-                      }
-                      toolCalls={
-                        message.role === 'assistant'
-                          ? readToolCalls(message.metadata_json)
-                          : null
-                      }
-                    />
-                  ))}
-                  {streaming && streamAssistant != null ? (
-                    <MessageBubble
-                      role="assistant"
-                      content={streamAssistant}
-                      streaming
-                      toolCalls={liveToolCalls.length > 0 ? liveToolCalls : null}
-                    />
-                  ) : null}
-                </>
-              )}
-            </div>
-
-            {fallbackChatError ? (
-              <p className="border-t border-[var(--line)] px-4 py-2 text-[12px] text-red-500">
-                {fallbackChatError}
+        <div ref={scrollRef} onScroll={handleScroll} className="msg-list">
+          {conversation == null ? (
+            <div className="welcome">
+              <span className="avatar lg av-1">
+                <span className="text-[22px]">✦</span>
+              </span>
+              <p className="mt-4 text-[16px] font-bold">有问题，随便问</p>
+              <p className="mt-1 text-[13px] muted">
+                在下方选择一个智能体，输入内容即可开始对话
               </p>
-            ) : null}
-
-            <div className="chat-input">
-              <ChatInput
-                disabled={inputDisabled}
-                streaming={streaming}
-                onSend={handleSend}
-                onStop={() => {
-                  deltaCountRef.current = 0
-                  stop()
-                }}
-              />
-              {streaming ? (
-                <p className="mt-2 text-center text-[12px] muted">
-                  生成中，点击「停止」可中断（已生成内容将保留，不视为消息完成）
+              {!canChat ? (
+                <p className="mt-3 text-[13px] muted">当前角色仅可查看，无对话权限</p>
+              ) : null}
+              {canChat && enabledAgents.length === 0 ? (
+                <p className="mt-3 text-[12px] muted">
+                  该组织暂无已启用的智能体，请先在「智能体管理」中创建
                 </p>
               ) : null}
             </div>
-          </>
-        ) : (
-          <WelcomePanel
-            agents={enabledAgents}
-            canChat={canChat}
-            creating={createConversation.isPending}
-            error={fallbackChatError}
-            onCreate={(agentId) => createConversation.mutate(agentId)}
-          />
-        )}
-      </div>
-    </div>
-  )
-}
-
-/** 欢迎态：无选中会话时引导选择智能体开始对话 */
-function WelcomePanel({
-  agents,
-  canChat,
-  creating,
-  error,
-  onCreate,
-}: {
-  agents: { id: number; name: string }[]
-  canChat: boolean
-  creating: boolean
-  error: string | null
-  onCreate: (agentId: number) => void
-}) {
-  const [agentId, setAgentId] = useState<number | null>(null)
-  return (
-    <div className="welcome">
-      <span className="avatar lg av-1">
-        <span className="text-[22px]">✦</span>
-      </span>
-      <p className="mt-4 text-[16px] font-bold">AI 对话</p>
-      <p className="mt-1 text-[13px] muted">
-        选择一个智能体开始新的对话；左侧面板可切换与管理历史会话
-      </p>
-      {canChat ? (
-        <div className="mt-6 flex w-full max-w-sm items-center gap-2">
-          <select
-            value={agentId ?? ''}
-            onChange={(e) => setAgentId(e.target.value ? Number(e.target.value) : null)}
-            className="select flex-1"
-          >
-            <option value="">选择智能体…</option>
-            {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={agentId == null || creating}
-            onClick={() => agentId != null && onCreate(agentId)}
-            className="btn primary"
-          >
-            {creating ? '创建中…' : '开始对话'}
-          </button>
+          ) : messages.length === 0 && !streaming ? (
+            <div className="welcome">
+              <p className="text-[14px] font-semibold text-[var(--ink-1)]">
+                开始与 {conversation.agent_name} 对话
+              </p>
+              <p className="mt-1 text-[12px] muted">
+                基于该会话创建时绑定的版本配置进行回答
+              </p>
+            </div>
+          ) : (
+            <>
+              {messages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  role={message.role}
+                  content={message.content}
+                  time={
+                    message.role === 'assistant' ? formatTime(message.created_at) : null
+                  }
+                  agentName={
+                    message.role === 'assistant' ? conversation?.agent_name : null
+                  }
+                  sources={
+                    message.role === 'assistant'
+                      ? (message.metadata_json?.sources as RAGSource[] | undefined)
+                      : undefined
+                  }
+                  toolCalls={
+                    message.role === 'assistant'
+                      ? readToolCalls(message.metadata_json)
+                      : null
+                  }
+                />
+              ))}
+              {streaming && streamAssistant != null ? (
+                <MessageBubble
+                  role="assistant"
+                  content={streamAssistant}
+                  streaming
+                  toolCalls={liveToolCalls.length > 0 ? liveToolCalls : null}
+                />
+              ) : null}
+            </>
+          )}
         </div>
-      ) : (
-        <p className="mt-6 text-[13px] muted">当前角色仅可查看，无对话权限</p>
-      )}
-      {canChat && agents.length === 0 ? (
-        <p className="mt-3 text-[12px] muted">
-          该组织暂无已启用的智能体，请先在「智能体管理」中创建
-        </p>
-      ) : null}
-      {error ? <p className="mt-3 text-[12px] text-red-500">{error}</p> : null}
+
+        {fallbackChatError ? (
+          <p className="border-t border-[var(--line)] px-4 py-2 text-[12px] text-red-500">
+            {fallbackChatError}
+          </p>
+        ) : null}
+
+        <div className="chat-input">
+          <ChatInput
+            disabled={inputDisabled}
+            streaming={streaming}
+            onSend={handleSend}
+            onStop={() => {
+              deltaCountRef.current = 0
+              stop()
+            }}
+            showAgentPicker={conversationId == null}
+            agents={enabledAgents}
+            agentId={conversationId == null ? selectedAgentId : null}
+            onSelectAgent={setSelectedAgentId}
+          />
+          {streaming ? (
+            <p className="mt-2 text-center text-[12px] muted">
+              生成中，点击「停止」可中断（已生成内容将保留，不视为消息完成）
+            </p>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

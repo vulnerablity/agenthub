@@ -231,12 +231,9 @@ class ProviderService:
             return TestConnectionResponse(
                 ok=False, latency_ms=0, error_type="forbidden", message=exc.message
             )
-        if (
-            data.model_key
-            and data.provider_type in REQUIRES_API_KEY
-            and not (data.api_key or "").strip()
-        ):
-            raise ModelProviderFieldRequired("API Key")
+        # 必密类型但请求未带 key（编辑页留空 = 不修改已存密钥）：不阻断测试，
+        # 由上游返回 401/403 后统一映射为 error_type=auth（D13：测试失败不抛 HTTP 错误，
+        # 与表单提示「不带密钥测试，必密类型返回鉴权失败」一致）
         headers = {"Content-Type": "application/json"}
         if (data.api_key or "").strip():
             headers["Authorization"] = f"Bearer {data.api_key}"
