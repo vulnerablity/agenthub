@@ -14,6 +14,8 @@ export type IconName =
   | 'activity'
   | 'search'
   | 'plus'
+  | 'panel-left'
+  | 'panel-right'
   | 'trash'
   | 'edit'
   | 'send'
@@ -67,6 +69,18 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M12 8V4M8 4h8M8 13h.01M16 13h.01M8 17h8" />
     </>
   ),
+  'panel-left': (
+    <>
+      <rect width="18" height="18" x="3" y="3" rx="2"/>
+      <path d="M9 3v18" />
+    </>
+  ),
+  'panel-right': (
+    <>
+      <rect width="18" height="18" x="3" y="3" rx="2"/>
+      <path d="M15 3v18" />
+    </>
+  ),
   book: (
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15ZM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
   ),
@@ -83,10 +97,10 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="m21 21-4.35-4.35" />
     </>
   ),
-  plus: <path d="M12 5v14M5 12h14" />,
   trash: <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />,
   edit: <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   send: <path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" />,
+  plus: <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
   check: <path d="M20 6 9 17l-5-5" />,
   'chev-down': <path d="m6 9 6 6 6-6" />,

@@ -33,7 +33,7 @@ export default function SessionList({
           title="收起侧边栏"
           onClick={onToggleSidebar}
         >
-          <Icon name="back" className="ic" />
+          <Icon name="panel-left" className="ic" />
         </button>
       </div>
       <div className="chat-side-func">

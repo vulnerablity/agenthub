@@ -308,7 +308,7 @@ export default function Chat() {
               title="展开侧边栏"
               onClick={() => setSidebarOpen(true)}
             >
-              <Icon name="chat" className="ic" />
+              <Icon name="panel-left" className="ic" />
             </button>
           ) : (
             <span />
