@@ -17,7 +17,14 @@ from app.core.exceptions import (
     ModelProviderNotFound,
     RAGConfigInvalid,
 )
-from app.models import Agent, AgentVersion, ModelProvider, Organization, ProviderModel, User
+from app.models import (
+    Agent,
+    AgentVersion,
+    ModelProvider,
+    Organization,
+    ProviderModel,
+    User,
+)
 from app.repositories.agent_repo import AgentRepository
 from app.repositories.knowledge_repo import KnowledgeRepository
 from app.schemas.agent import (

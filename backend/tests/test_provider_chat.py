@@ -3,7 +3,6 @@
 # _resolve_provider 两档解析（D2/D4）+ LLMClient.chat_stream payload 回归断言
 # （caps=None 与旧行为逐字节一致，含 stream_options；stream_usage=False 不携带）
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 
 import pytest
 import pytest_asyncio
@@ -12,7 +11,14 @@ from cryptography.fernet import Fernet
 from app.core.config import settings
 from app.core.exceptions import ModelProviderDisabled, ProviderKeyInvalid
 from app.integrations import llm as llm_module
-from app.models import Agent, AgentVersion, ModelProvider, Organization, ProviderModel, User
+from app.models import (
+    Agent,
+    AgentVersion,
+    ModelProvider,
+    Organization,
+    ProviderModel,
+    User,
+)
 from app.schemas.model_provider import DEFAULT_CAPABILITIES
 from app.services.chat_service import ChatService
 from app.utils.crypto import encrypt_api_key
