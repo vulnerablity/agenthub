@@ -57,7 +57,9 @@ async def list_conversations(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ConversationListItem]:
     org, _ = ctx
-    return await ChatService(db).list_conversations(org, user, agent_id, search, limit, offset)
+    return await ChatService(db).list_conversations(
+        org, user, agent_id, search, limit, offset
+    )
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
@@ -79,7 +81,11 @@ async def delete_conversation(
 
 @router.patch("/{conversation_id}", response_model=ConversationDetail)
 async def update_conversation(
-    conversation_id: int, data: ConversationUpdateRequest, ctx: ChatCtx, user: CurrentUser, db: DbSession
+    conversation_id: int,
+    data: ConversationUpdateRequest,
+    ctx: ChatCtx,
+    user: CurrentUser,
+    db: DbSession,
 ) -> ConversationDetail:
     org, _ = ctx
     return await ChatService(db).update_conversation(org, user, conversation_id, data)

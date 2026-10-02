@@ -110,7 +110,9 @@ def _sse(event: str, payload: BaseModel | dict) -> str:
     data = payload if isinstance(payload, dict) else payload.model_dump()
     if isinstance(payload, SseDonePayload):
         # 新增的追溯 ID 对旧/模拟来源为空时省略，避免破坏既有 SSE 字段语义。
-        data["sources"] = [source.model_dump(exclude_none=True) for source in payload.sources]
+        data["sources"] = [
+            source.model_dump(exclude_none=True) for source in payload.sources
+        ]
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
@@ -216,7 +218,11 @@ class ChatService:
         ]
 
     async def update_conversation(
-        self, org: Organization, user: User, conversation_id: int, data: ConversationUpdateRequest
+        self,
+        org: Organization,
+        user: User,
+        conversation_id: int,
+        data: ConversationUpdateRequest,
     ) -> ConversationDetail:
         conversation, agent_id = await self._get_owned(org, user, conversation_id)
         conversation.title = data.title.strip()
@@ -274,7 +280,9 @@ class ChatService:
         conversation, _ = await self._get_owned(org, user, conversation_id)
         lock = await self._acquire(conversation.id)
         try:
-            return await self._run_generation(org, user, conversation, content, retry=data.retry)
+            return await self._run_generation(
+                org, user, conversation, content, retry=data.retry
+            )
         finally:
             lock.release()
 
@@ -290,7 +298,9 @@ class ChatService:
         if not content:
             raise MessageContentRequired()
         conversation, _ = await self._get_owned(org, user, conversation_id)
-        ctx, _ = await self._prepare_generation(org, user, conversation, content, retry=data.retry)
+        ctx, _ = await self._prepare_generation(
+            org, user, conversation, content, retry=data.retry
+        )
         # 锁在 _prepare_generation 内获取并随 ctx 保持；服务实例持有直至 sse_events 结束
         self._stream_ctx = ctx
 
@@ -300,7 +310,9 @@ class ChatService:
         assert ctx is not None, "sse_events 必须先经 prepare_stream"
         lock = self._lock_for(ctx.conversation.id)
         try:
-            done_sources = [source.model_dump(exclude_none=True) for source in ctx.sources]
+            done_sources = [
+                source.model_dump(exclude_none=True) for source in ctx.sources
+            ]
             try:
                 async for event, payload in self._agent_loop(ctx):
                     if event == "message":
@@ -375,14 +387,21 @@ class ChatService:
         """通用生成前置：拿锁 → 校验 Agent 可用 → 加载版本快照 → 组上下文（含 RAG）→ 落库用户消息"""
         lock = await self._acquire(conversation.id)
         try:
-            ctx = await self._build_context(org, user, conversation, content, retry=retry)
+            ctx = await self._build_context(
+                org, user, conversation, content, retry=retry
+            )
         except BaseException:
             lock.release()
             raise
         return ctx, lock
 
     async def _build_context(
-        self, org: Organization, user: User, conversation: Conversation, content: str, retry: bool = False
+        self,
+        org: Organization,
+        user: User,
+        conversation: Conversation,
+        content: str,
+        retry: bool = False,
     ) -> _StreamCtx:
         agent = await self.repo.get_agent(conversation.agent_id)
         # 启停即时生效（agent 模块 D5）：禁用后拒绝继续对话
@@ -399,7 +418,11 @@ class ChatService:
             conversation.id, settings.CHAT_HISTORY_LIMIT
         )
         if retry:
-            if not history or history[-1].role != "user" or history[-1].content != content:
+            if (
+                not history
+                or history[-1].role != "user"
+                or history[-1].content != content
+            ):
                 raise MessageContentRequired()
             history = history[:-1]
         llm_message = [{"role": "system", "content": version.system_prompt}]
@@ -796,7 +819,9 @@ class ChatService:
                     "model_name": version.model_name,
                     "agent_version_id": version.id,
                     "rag": rag_meta,
-                    "sources": [source.model_dump(exclude_none=True) for source in sources],
+                    "sources": [
+                        source.model_dump(exclude_none=True) for source in sources
+                    ],
                     "tool_calls": tool_trace,
                     "tool_calls_max_rounds": tool_max_rounds,
                 },

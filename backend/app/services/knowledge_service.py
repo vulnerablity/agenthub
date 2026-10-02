@@ -174,7 +174,9 @@ class KnowledgeService:
         await self.repo.delete_document(doc)
         await self.db.commit()
 
-    async def reprocess_document(self, org: Organization, document_id: int) -> DocumentListItem:
+    async def reprocess_document(
+        self, org: Organization, document_id: int
+    ) -> DocumentListItem:
         doc = await self._get_document_in_org(org, document_id)
         if doc.status in ("pending", "processing"):
             raise DocumentProcessing()
@@ -188,7 +190,9 @@ class KnowledgeService:
         document_worker.get_worker().enqueue(doc.id)
         return self._document_item(doc)
 
-    async def list_document_chunks(self, org: Organization, document_id: int) -> list[DocumentChunkItem]:
+    async def list_document_chunks(
+        self, org: Organization, document_id: int
+    ) -> list[DocumentChunkItem]:
         doc = await self._get_document_in_org(org, document_id)
         chunks = await self.repo.list_document_chunks(doc.id)
         return [

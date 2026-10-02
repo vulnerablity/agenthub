@@ -200,16 +200,20 @@ async def test_stream_retry_reuses_failed_user_message(client, monkeypatch):
         _fake_chat(["部分内容"], error_after=LLMUpstreamError()),
     )
     async with client.stream(
-        "POST", f"/api/v1/conversations/{conv['id']}/stream",
-        json={"content": "请总结文档"}, headers=hdr,
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "请总结文档"},
+        headers=hdr,
     ) as resp:
         failed_events = await _read_sse(resp)
     assert any(event == "error" for event, _ in failed_events)
 
     monkeypatch.setattr(llm_module.LLMClient, "chat_stream", _fake_chat(["总结完成"]))
     async with client.stream(
-        "POST", f"/api/v1/conversations/{conv['id']}/stream",
-        json={"content": "请总结文档", "retry": True}, headers=hdr,
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "请总结文档", "retry": True},
+        headers=hdr,
     ) as resp:
         retried_events = await _read_sse(resp)
     assert any(event == "done" for event, _ in retried_events)
