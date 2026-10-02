@@ -14,6 +14,7 @@ from app.schemas.chat import (
     ConversationListItem,
     MessageCreateRequest,
     MessageDetail,
+    ConversationUpdateRequest,
 )
 from app.services.chat_service import ChatService
 
@@ -51,11 +52,12 @@ async def list_conversations(
     user: CurrentUser,
     db: DbSession,
     agent_id: Annotated[int | None, Query()] = None,
+    search: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ConversationListItem]:
     org, _ = ctx
-    return await ChatService(db).list_conversations(org, user, agent_id, limit, offset)
+    return await ChatService(db).list_conversations(org, user, agent_id, search, limit, offset)
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
@@ -73,6 +75,14 @@ async def delete_conversation(
     org, _ = ctx
     await ChatService(db).delete_conversation(org, user, conversation_id)
     return Response(status_code=204)
+
+
+@router.patch("/{conversation_id}", response_model=ConversationDetail)
+async def update_conversation(
+    conversation_id: int, data: ConversationUpdateRequest, ctx: ChatCtx, user: CurrentUser, db: DbSession
+) -> ConversationDetail:
+    org, _ = ctx
+    return await ChatService(db).update_conversation(org, user, conversation_id, data)
 
 
 @router.get("/{conversation_id}/messages", response_model=list[MessageDetail])

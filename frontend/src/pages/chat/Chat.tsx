@@ -79,10 +79,14 @@ export default function Chat() {
 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [sessionSearch, setSessionSearch] = useState('')
   const { data: org } = useOrg(orgId)
-  const { data: conversations } = useConversations(orgId)
-  const { data: agents } = useAgents(orgId, {})
-  const { data: conversation } = useConversation(orgId, conversationId)
+  const conversationsQuery = useConversations(orgId, true, sessionSearch)
+  const conversations = conversationsQuery.data
+  const agentsQuery = useAgents(orgId, {})
+  const agents = agentsQuery.data
+  const conversationQuery = useConversation(orgId, conversationId)
+  const conversation = conversationQuery.data
   const { data: history } = useConversationMessages(orgId, conversationId)
 
   // ---------- 布局：侧边栏开关 + 拖拽分栏 ----------
@@ -120,6 +124,8 @@ export default function Chat() {
   // 流式中的工具调用轨迹（tool_call → running，tool_result → ok/error 并附输出）
   const [liveToolCalls, setLiveToolCalls] = useState<ToolCallView[]>([])
   const [chatError, setChatError] = useState<string | null>(null)
+  const [retryContent, setRetryContent] = useState<string | null>(null)
+  const lastSubmittedRef = useRef<string | null>(null)
   const deltaCountRef = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const nearBottomRef = useRef(true)
@@ -147,6 +153,7 @@ export default function Chat() {
       deltaCountRef.current = 0
       setStreamAssistant(null)
       setLiveToolCalls([])
+      setRetryContent(null)
       refreshAfterStream()
     },
     onStreamError: (payload) => {
@@ -154,6 +161,7 @@ export default function Chat() {
       setStreamAssistant(null)
       setLiveToolCalls([])
       setChatError(payload.message)
+      setRetryContent(lastSubmittedRef.current)
       refreshAfterStream()
     },
     onToolCall: (payload) => {
@@ -211,6 +219,8 @@ export default function Chat() {
   /** 真正发起流式：乐观上屏用户消息 + SSE 发送 */
   const doSend = (content: string, cid: number) => {
     setChatError(null)
+    setRetryContent(null)
+    lastSubmittedRef.current = content
     deltaCountRef.current = 0
     setLiveToolCalls([])
     setMessages((prev) => [...prev, localUserMessage(content)])
@@ -240,6 +250,12 @@ export default function Chat() {
         navigate(chatPath(orgId!))
       }
     },
+    onError: (error) => setChatError(errorMessage(error)),
+  })
+
+  const renameConversation = useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) => conversationApi.update(id, { title }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: conversationsQueryKey(orgId ?? 0) }),
     onError: (error) => setChatError(errorMessage(error)),
   })
 
@@ -289,6 +305,12 @@ export default function Chat() {
               activeId={conversationId}
               onSelect={(id) => navigate(chatConversationPath(orgId, id))}
               onDelete={(id) => deleteConversation.mutate(id)}
+              onRename={(id, title) => renameConversation.mutate({ id, title })}
+              search={sessionSearch}
+              onSearch={setSessionSearch}
+              isLoading={conversationsQuery.isPending}
+              loadError={conversationsQuery.isError}
+              onRetryLoad={() => void conversationsQuery.refetch()}
               onNewChat={() => navigate(chatPath(orgId))}
               onToggleSidebar={() => {setSidebarOpen(false)
                 setSidebarWidth(SIDEBAR_DEFAULT)
@@ -340,7 +362,11 @@ export default function Chat() {
         </header>
 
         <div ref={scrollRef} onScroll={handleScroll} className="msg-list">
-          {conversation == null ? (
+          {conversationId != null && conversationQuery.isPending ? (
+            <div className="welcome"><p>正在加载会话…</p></div>
+          ) : conversationId != null && conversationQuery.isError ? (
+            <div className="welcome"><p className="text-red-600">会话加载失败或无权访问。</p><button type="button" className="btn ghost sm mt-3" onClick={() => void conversationQuery.refetch()}>重试</button></div>
+          ) : conversation == null ? (
             <div className="welcome">
               <span className="avatar lg av-1">
                 <span className="text-[22px]">✦</span>
@@ -352,7 +378,9 @@ export default function Chat() {
               {!canChat ? (
                 <p className="mt-3 text-[13px] muted">当前角色仅可查看，无对话权限</p>
               ) : null}
-              {canChat && enabledAgents.length === 0 ? (
+              {agentsQuery.isPending ? <p className="mt-3 text-[12px] muted">正在加载智能体…</p> : null}
+              {agentsQuery.isError ? <p className="mt-3 text-[12px] text-red-500">智能体列表加载失败，请刷新后重试。</p> : null}
+              {canChat && !agentsQuery.isPending && enabledAgents.length === 0 ? (
                 <p className="mt-3 text-[12px] muted">
                   该组织暂无已启用的智能体，请先在「智能体管理」中创建
                 </p>
@@ -380,6 +408,7 @@ export default function Chat() {
                   agentName={
                     message.role === 'assistant' ? conversation?.agent_name : null
                   }
+                  orgId={orgId}
                   sources={
                     message.role === 'assistant'
                       ? (message.metadata_json?.sources as RAGSource[] | undefined)
@@ -405,9 +434,22 @@ export default function Chat() {
         </div>
 
         {fallbackChatError ? (
-          <p className="border-t border-[var(--line)] px-4 py-2 text-[12px] text-red-500">
-            {fallbackChatError}
-          </p>
+          <div className="flex items-center justify-center gap-3 border-t border-[var(--line)] px-4 py-2 text-[12px] text-red-500">
+            <span>{fallbackChatError}</span>
+            {retryContent && conversationId != null && !streaming ? (
+              <button
+                type="button"
+                className="btn ghost xs"
+                onClick={() => {
+                  setChatError(null)
+                  setStreamAssistant('')
+                  setLiveToolCalls([])
+                  deltaCountRef.current = 0
+                  send(retryContent, conversationId, true)
+                }}
+              >重试回答</button>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="chat-input">
@@ -418,6 +460,8 @@ export default function Chat() {
             onStop={() => {
               deltaCountRef.current = 0
               stop()
+              setRetryContent(lastSubmittedRef.current)
+              setChatError('已停止生成，可重试回答')
             }}
             showAgentPicker={conversationId == null}
             agents={enabledAgents}

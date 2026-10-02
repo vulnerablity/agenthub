@@ -2,6 +2,7 @@
 # 知识库接口集成测试：覆盖 KB CRUD / 组织隔离 / 上传校验 / 异步处理状态机 / 删除竞态 /
 # Embedding 模型一致性 / 双写失败清理 / 检索结构 / 权限矩阵 / 重启恢复（knowledge.md 6）
 import asyncio
+from pathlib import Path
 
 import pytest_asyncio
 from sqlalchemy import func, select
@@ -133,6 +134,8 @@ async def knowledge_env(monkeypatch, engine, request):
         return hits
 
     async def fake_delete_document(self, document_id):
+        if env.get("delete_error") is not None:
+            raise env["delete_error"]
         env["deleted_docs"].append(document_id)
         env["vector_upserted"] = [
             (vid, payload)
@@ -141,6 +144,8 @@ async def knowledge_env(monkeypatch, engine, request):
         ]
 
     async def fake_delete_kb(self, kb_id):
+        if env.get("delete_error") is not None:
+            raise env["delete_error"]
         env["deleted_kbs"].append(kb_id)
         env["vector_upserted"] = [
             (vid, payload)
@@ -368,6 +373,23 @@ async def test_document_lifecycle_and_search(client, knowledge_env, db, engine):
     assert "年假" in hit["content"]
     assert hit["page"] is None
     assert 0 < hit["score"] <= 1
+    assert hit["document_id"] == doc["id"]
+    assert hit["knowledge_base_id"] == kb["id"]
+
+    chunks = await client.get(f"/api/v1/documents/{doc['id']}/chunks", headers=hdr)
+    assert chunks.status_code == 200
+    assert chunks.json()[0]["content"]
+    assert chunks.json()[0]["chunk_index"] == 0
+
+    # 已完成文档可重新解析，旧向量先清理，随后回到 completed。
+    reprocess = await client.post(
+        f"/api/v1/documents/{doc['id']}/reprocess", headers=hdr
+    )
+    assert reprocess.status_code == 200
+    assert reprocess.json()["status"] == "pending"
+    assert doc["id"] in knowledge_env["deleted_docs"]
+    await _wait_status(engine, doc["id"], expect="completed")
+    await db.rollback()
 
     # 删除文档：DB 行与向量点同步清理（D9）
     doc_id = doc["id"]
@@ -389,6 +411,35 @@ async def test_document_lifecycle_and_search(client, knowledge_env, db, engine):
         headers=hdr,
     )
     assert search.json()["results"] == []
+
+
+async def test_delete_preserves_document_when_vector_cleanup_fails(
+    client, knowledge_env, db, engine
+):
+    from app.core.exceptions import VectorStoreError
+
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    kb = await _create_kb(client, token, org["id"])
+    uploaded = await _upload(client, token, org["id"], kb["id"], "keep.txt", b"content")
+    doc_id = uploaded.json()["id"]
+    await _wait_status(engine, doc_id)
+    await db.rollback()
+    document = await db.get(Document, doc_id)
+    assert document is not None
+    stored_file = Path(document.storage_path)
+    assert stored_file.exists()
+
+    knowledge_env["delete_error"] = VectorStoreError()
+    response = await client.delete(
+        f"/api/v1/documents/{doc_id}", headers=_hdr(token, org["id"])
+    )
+    assert response.status_code == 502
+    assert response.json()["code"] == "VECTOR_STORE_ERROR"
+    await db.rollback()
+    assert await db.get(Document, doc_id) is not None
+    assert stored_file.exists()
 
 
 async def test_embeddng_model_uses_kb_snapshot(

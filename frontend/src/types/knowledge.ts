@@ -39,6 +39,15 @@ export interface KnowledgeDocumentItem {
   created_at: string
 }
 
+export interface DocumentChunkItem {
+  id: number
+  chunk_index: number
+  content: string
+  page_start: number | null
+  page_end: number | null
+  token_count: number
+}
+
 export interface DocumentStatusDetail {
   id: number
   filename: string
@@ -57,6 +66,8 @@ export interface SearchResultItem {
   document: string
   page: number | null
   score: number
+  document_id?: number | null
+  knowledge_base_id?: number | null
 }
 
 export interface KnowledgeSearchResponse {

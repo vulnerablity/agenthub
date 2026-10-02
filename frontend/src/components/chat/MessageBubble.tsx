@@ -2,6 +2,7 @@
 // 消息气泡：用户右（渐变底）/ 助手左（白底 Markdown 渲染，chat.md D10）；流式未完成时显示光标
 // 助手消息底部渲染工具调用轨迹（tool-calling.md 3.5：running/ok/error chip，点开看输出）与 RAG 引用来源区（knowledge.md D11）
 import ReactMarkdown from 'react-markdown'
+import { useState } from 'react'
 
 import type { ChatRole, RAGSource } from '@/types'
 
@@ -27,6 +28,7 @@ interface MessageBubbleProps {
   time?: string | null
   /** 智能体名（助手消息底部展示） */
   agentName?: string | null
+  orgId?: number | null
 }
 
 export default function MessageBubble({
@@ -37,7 +39,9 @@ export default function MessageBubble({
   toolCalls,
   time,
   agentName,
+  orgId,
 }: MessageBubbleProps) {
+  const [copied, setCopied] = useState(false)
   const isUser = role === 'user'
   const showSources = !isUser && !streaming && sources != null && sources.length > 0
   const showTools = !isUser && toolCalls != null && toolCalls.length > 0
@@ -53,6 +57,18 @@ export default function MessageBubble({
           </div>
         )}
         {streaming ? <span className="msg-cursor" /> : null}
+        {!isUser && !streaming && content ? (
+          <button
+            type="button"
+            className="mt-2 text-[11px] text-[var(--ink-3)] hover:text-[var(--accent)]"
+            onClick={() => {
+              void navigator.clipboard.writeText(content).then(() => {
+                setCopied(true)
+                window.setTimeout(() => setCopied(false), 1500)
+              })
+            }}
+          >{copied ? '已复制' : '复制回答'}</button>
+        ) : null}
         {showTools ? (
           <div className="tool-block">
             <p className="hd">工具调用</p>
@@ -97,6 +113,11 @@ export default function MessageBubble({
                       <span className="chev">▾</span>
                     </summary>
                     <p className="src-content">{source.content}</p>
+                    {orgId != null && source.knowledge_base_id != null ? (
+                      <a className="mt-2 inline-block text-[11px] font-semibold text-[var(--accent)] hover:underline" href={`/organizations/${orgId}/knowledge-bases/${source.knowledge_base_id}`}>
+                        打开知识库
+                      </a>
+                    ) : null}
                   </details>
                 </li>
               ))}

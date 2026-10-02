@@ -50,6 +50,12 @@ export const knowledgeApi = {
   removeDocument(documentId: number) {
     return http.delete(`/documents/${documentId}`)
   },
+  reprocessDocument(documentId: number) {
+    return http.post<KnowledgeDocumentItem>(`/documents/${documentId}/reprocess`)
+  },
+  listChunks(documentId: number) {
+    return http.get<import('@/types').DocumentChunkItem[]>(`/documents/${documentId}/chunks`)
+  },
   getDocumentStatus(documentId: number) {
     return http.get<DocumentStatusDetail>(`/documents/${documentId}/status`)
   },

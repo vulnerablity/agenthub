@@ -148,3 +148,11 @@ class KnowledgeRepository:
             select(DocumentChunk).where(DocumentChunk.vector_id.in_(vector_ids))
         )
         return {chunk.vector_id: chunk for chunk in result.scalars().all()}
+
+    async def list_document_chunks(self, document_id: int) -> list[DocumentChunk]:
+        result = await self.db.execute(
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
+            .order_by(DocumentChunk.chunk_index.asc())
+        )
+        return list(result.scalars().all())

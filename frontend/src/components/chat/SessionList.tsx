@@ -9,6 +9,12 @@ interface SessionListProps {
   activeId: number | null
   onSelect: (conversationId: number) => void
   onDelete: (conversationId: number) => void
+  onRename: (conversationId: number, title: string) => void
+  search: string
+  onSearch: (value: string) => void
+  isLoading: boolean
+  loadError: boolean
+  onRetryLoad: () => void
   /** 回到欢迎态（未选中会话），在输入框内重新选择智能体 */
   onNewChat: () => void
   /** 收起侧边栏 */
@@ -20,6 +26,12 @@ export default function SessionList({
   activeId,
   onSelect,
   onDelete,
+  onRename,
+  search,
+  onSearch,
+  isLoading,
+  loadError,
+  onRetryLoad,
   onNewChat,
   onToggleSidebar,
 }: SessionListProps) {
@@ -42,8 +54,13 @@ export default function SessionList({
           新建对话
         </button>
       </div>
+      <div className="px-3 pb-2">
+        <input className="input w-full" aria-label="搜索会话" placeholder="搜索会话标题…" value={search} onChange={(e) => onSearch(e.target.value)} />
+      </div>
       <div className="chat-side-body">
-        {conversations.length === 0 ? (
+        {isLoading ? <p className="side-empty">正在加载会话…</p> : loadError ? (
+          <div className="side-empty"><p>会话加载失败</p><button type="button" className="mt-2 underline" onClick={onRetryLoad}>重试</button></div>
+        ) : conversations.length === 0 ? (
           <p className="side-empty">暂无对话，点击「新建对话」开始</p>
         ) : (
           <ul className="side-list">
@@ -63,6 +80,16 @@ export default function SessionList({
                     <span className="t" title={conv.title}>
                       {conv.title}
                     </span>
+                    <button
+                      type="button"
+                      className="session-del"
+                      aria-label="重命名会话"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const title = window.prompt('输入新的会话标题', conv.title)?.trim()
+                        if (title) onRename(conv.id, title)
+                      }}
+                    >重命名</button>
                     <button
                       type="button"
                       className="session-del"

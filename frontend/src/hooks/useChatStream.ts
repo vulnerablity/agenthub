@@ -39,7 +39,7 @@ export function useChatStream({
 
   const send = useCallback(
     // cid 可选：方案A 下"新建会话后直接向新会话发送首条消息"时显式传入目标会话 id
-    (content: string, cid?: number) => {
+    (content: string, cid?: number, retry = false) => {
       const targetId = cid ?? conversationId
       if (targetId == null || streaming) return
       setError(null)
@@ -48,7 +48,7 @@ export function useChatStream({
       abortRef.current = controller
       postSse(
         `/conversations/${targetId}/stream`,
-        { content },
+        { content, retry },
         {
           onMessage: onDelta,
           onDone: (payload) => {

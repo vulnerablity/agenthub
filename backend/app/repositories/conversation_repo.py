@@ -1,6 +1,6 @@
 # repositories/conversation_repo.py
 # conversations / messages 数据访问层（Service 层不直接写 SQL；chat.md D12 组织过滤在此实现）
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Agent, AgentVersion, Conversation, Message
@@ -57,6 +57,7 @@ class ConversationRepository:
         user_id: int,
         org_id: int,
         agent_id: int | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[tuple[Conversation, str, str | None, str | None, object]]:
@@ -100,6 +101,17 @@ class ConversationRepository:
         )
         if agent_id is not None:
             stmt = stmt.where(Conversation.agent_id == agent_id)
+        if search:
+            pattern = f"%{search.strip()}%"
+            matching_message = (
+                select(Message.id)
+                .where(
+                    Message.conversation_id == Conversation.id,
+                    Message.content.ilike(pattern),
+                )
+                .exists()
+            )
+            stmt = stmt.where(or_(Conversation.title.ilike(pattern), matching_message))
         result = await self.db.execute(stmt)
         return [(row[0], row[1], row[2], row[3], row[4]) for row in result.all()]
 

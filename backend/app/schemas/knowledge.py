@@ -81,6 +81,15 @@ class DocumentStatusDetail(BaseModel):
     chunk_count: int
 
 
+class DocumentChunkItem(BaseModel):
+    id: int
+    chunk_index: int
+    content: str
+    page_start: int | None = None
+    page_end: int | None = None
+    token_count: int
+
+
 class SearchRequest(BaseModel):
     """RAG 检索请求（需求 3.6）"""
 
@@ -95,6 +104,8 @@ class SearchResultItem(BaseModel):
     document: str
     page: int | None
     score: float
+    document_id: int | None = None
+    knowledge_base_id: int | None = None
 
 
 class SearchResponse(BaseModel):
@@ -110,6 +121,8 @@ class RAGSource(BaseModel):
     document: str
     page: int | None
     score: float
+    document_id: int | None = None
+    knowledge_base_id: int | None = None
 
 
 class RAGConfig(BaseModel):
