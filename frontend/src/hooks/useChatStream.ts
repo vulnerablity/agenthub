@@ -38,14 +38,16 @@ export function useChatStream({
   const abortRef = useRef<AbortController | null>(null)
 
   const send = useCallback(
-    (content: string) => {
-      if (conversationId == null || streaming) return
+    // cid 可选：方案A 下"新建会话后直接向新会话发送首条消息"时显式传入目标会话 id
+    (content: string, cid?: number) => {
+      const targetId = cid ?? conversationId
+      if (targetId == null || streaming) return
       setError(null)
       setStreaming(true)
       const controller = new AbortController()
       abortRef.current = controller
       postSse(
-        `/conversations/${conversationId}/stream`,
+        `/conversations/${targetId}/stream`,
         { content },
         {
           onMessage: onDelta,
