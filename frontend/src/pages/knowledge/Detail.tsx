@@ -9,7 +9,7 @@ import { canManageAgent } from '@/constants/agent-options'
 import { errorMessage } from '@/constants/error-messages'
 import { knowledgeBaseEditPath, knowledgeBasesPath } from '@/constants/routes'
 import { useKnowledgeBase } from '@/hooks/useKnowledgeBase'
-import { useDocumentMutations, useKnowledgeDocuments } from '@/hooks/useKnowledgeDocuments'
+import { useDocumentChunks, useDocumentMutations, useKnowledgeDocuments } from '@/hooks/useKnowledgeDocuments'
 import { useKnowledgeSearch } from '@/hooks/useKnowledgeSearch'
 import { useOrg } from '@/hooks/useOrg'
 import type { DocumentStatus } from '@/types'
@@ -36,9 +36,13 @@ export default function KnowledgeBaseDetail() {
 
   const navigate = useNavigate()
   const { data: org } = useOrg(orgId)
-  const { data: kb, isPending } = useKnowledgeBase(orgId, kbId)
-  const { data: documents } = useKnowledgeDocuments(orgId, kbId)
-  const { uploadMutation, deleteDocumentMutation } = useDocumentMutations(orgId, kbId)
+  const kbQuery = useKnowledgeBase(orgId, kbId)
+  const kb = kbQuery.data
+  const documentsQuery = useKnowledgeDocuments(orgId, kbId)
+  const documents = documentsQuery.data
+  const [expandedDocumentId, setExpandedDocumentId] = useState<number | null>(null)
+  const chunks = useDocumentChunks(orgId, expandedDocumentId)
+  const { uploadMutation, deleteDocumentMutation, reprocessDocumentMutation } = useDocumentMutations(orgId, kbId)
   const search = useKnowledgeSearch(kbId)
 
   const canManage = canManageAgent(org?.my_role)
@@ -55,8 +59,12 @@ export default function KnowledgeBaseDetail() {
     return <p className="muted">参数无效</p>
   }
 
-  if (isPending) {
-    return <p className="muted">加载中…</p>
+  if (kbQuery.isPending) {
+    return <div className="card card-pad animate-pulse">正在加载知识库…</div>
+  }
+
+  if (kbQuery.isError) {
+    return <div className="card card-pad"><p className="text-red-600">知识库加载失败，请重试。</p><button type="button" className="btn ghost sm mt-3" onClick={() => void kbQuery.refetch()}>重试</button></div>
   }
 
   if (!kb) {
@@ -143,7 +151,7 @@ export default function KnowledgeBaseDetail() {
 
       {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      <div className="mt-5 grid gap-5" style={{ gridTemplateColumns: '1fr 400px' }}>
+      <div className="kb-detail-grid mt-5 grid gap-5">
         {/* 左：文档区 */}
         <div className="flex min-w-0 flex-col gap-4">
           {canManage ? (
@@ -203,12 +211,16 @@ export default function KnowledgeBaseDetail() {
             </p>
           ) : null}
 
-          {documents && documents.length > 0 ? (
+          {documentsQuery.isPending ? (
+            <div className="card card-pad animate-pulse">正在加载文档列表…</div>
+          ) : documentsQuery.isError ? (
+            <div className="card card-pad"><p className="text-red-600">文档列表加载失败。</p><button type="button" className="btn ghost xs mt-2" onClick={() => void documentsQuery.refetch()}>重试</button></div>
+          ) : documents && documents.length > 0 ? (
             <ul className="flex flex-col gap-3">
               {documents.map((doc) => {
                 const meta = DOC_STATUS_META[doc.status]
                 return (
-                  <li key={doc.id} className="card card-pad flex items-center gap-4" style={{ padding: '14px 16px' }}>
+                  <li key={doc.id} className="card card-pad flex flex-wrap items-center gap-4" style={{ padding: '14px 16px' }}>
                     <span className="avatar md av-6">
                       <Icon name="file-text" width={16} height={16} />
                     </span>
@@ -234,6 +246,15 @@ export default function KnowledgeBaseDetail() {
                       ) : null}
                     </div>
                     {canManage ? (
+                      <>
+                      {doc.status === 'failed' || doc.status === 'completed' ? (
+                        <button
+                          type="button"
+                          disabled={reprocessDocumentMutation.isPending}
+                          onClick={() => reprocessDocumentMutation.mutate(doc.id, { onError: (error) => setApiError(errorMessage(error)) })}
+                          className="btn xs ghost shrink-0"
+                        >重新解析</button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={
@@ -248,6 +269,26 @@ export default function KnowledgeBaseDetail() {
                           ? '删除中…'
                           : '删除'}
                       </button>
+                      </>
+                    ) : null}
+                    {doc.status === 'completed' ? (
+                      <button
+                        type="button"
+                        className="btn xs ghost shrink-0"
+                        onClick={() => setExpandedDocumentId(expandedDocumentId === doc.id ? null : doc.id)}
+                      >{expandedDocumentId === doc.id ? '收起分片' : '预览分片'}</button>
+                    ) : null}
+                    {expandedDocumentId === doc.id ? (
+                      <div className="w-full border-t border-[var(--line)] pt-3">
+                        {chunks.isPending ? <p className="muted">正在加载分片…</p> : null}
+                        {chunks.isError ? <div className="text-[12px] text-red-500">分片加载失败。<button type="button" className="ml-2 underline" onClick={() => void chunks.refetch()}>重试</button></div> : null}
+                        {chunks.data?.map((chunk) => (
+                          <details key={chunk.id} className="mb-2 rounded-lg border border-[var(--line)] p-3">
+                            <summary className="cursor-pointer text-[12px] font-semibold">分片 {chunk.chunk_index + 1} · {chunk.token_count} tokens{chunk.page_start != null ? ` · 第 ${chunk.page_start}${chunk.page_end && chunk.page_end !== chunk.page_start ? `–${chunk.page_end}` : ''} 页` : ''}</summary>
+                            <p className="mt-2 whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--ink-2)]">{chunk.content}</p>
+                          </details>
+                        ))}
+                      </div>
                     ) : null}
                   </li>
                 )

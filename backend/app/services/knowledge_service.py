@@ -34,6 +34,7 @@ from app.integrations.vector_store import (
 from app.models import Document, KnowledgeBase, Organization
 from app.repositories.knowledge_repo import KnowledgeRepository
 from app.schemas.knowledge import (
+    DocumentChunkItem,
     DocumentListItem,
     DocumentStatusDetail,
     KnowledgeBaseCreateRequest,
@@ -115,11 +116,9 @@ class KnowledgeService:
         kb = await self._get_in_org(org, kb_id)
         if await self.repo.has_processing(kb.id):
             raise KnowledgeBaseProcessing()
+        # 向量删除成功后才删本地文件和 DB，避免留下可检索的孤儿向量。
+        await get_vector_store().delete_kb(kb.id)
         self._remove_dir(self._kb_dir(kb.id))
-        try:
-            await get_vector_store().delete_kb(kb.id)
-        except VectorStoreError:
-            pass  # Qdrant 故障不阻断删除（knowledge.md 3.3 备注）
         await self.repo.delete_kb(kb)
         await self.db.commit()
 
@@ -169,13 +168,44 @@ class KnowledgeService:
         doc = await self._get_document_in_org(org, document_id)
         if doc.status == "processing":
             raise DocumentProcessing()
+        # 向量删除失败时保留文档与原文件，允许安全重试删除。
+        await get_vector_store().delete_document(doc.id)
         self._remove_file(Path(doc.storage_path))
-        try:
-            await get_vector_store().delete_document(doc.id)
-        except VectorStoreError:
-            pass
         await self.repo.delete_document(doc)
         await self.db.commit()
+
+    async def reprocess_document(
+        self, org: Organization, document_id: int
+    ) -> DocumentListItem:
+        doc = await self._get_document_in_org(org, document_id)
+        if doc.status in ("pending", "processing"):
+            raise DocumentProcessing()
+        await get_vector_store().delete_document(doc.id)
+        await self.repo.delete_chunks_by_document(doc.id)
+        doc.status = "pending"
+        doc.error_message = None
+        doc.chunk_count = 0
+        await self.db.commit()
+        await self.db.refresh(doc)
+        document_worker.get_worker().enqueue(doc.id)
+        return self._document_item(doc)
+
+    async def list_document_chunks(
+        self, org: Organization, document_id: int
+    ) -> list[DocumentChunkItem]:
+        doc = await self._get_document_in_org(org, document_id)
+        chunks = await self.repo.list_document_chunks(doc.id)
+        return [
+            DocumentChunkItem(
+                id=chunk.id,
+                chunk_index=chunk.chunk_index,
+                content=chunk.content,
+                page_start=(chunk.metadata_json or {}).get("page_start"),
+                page_end=(chunk.metadata_json or {}).get("page_end"),
+                token_count=chunk.token_count,
+            )
+            for chunk in chunks
+        ]
 
     async def get_document_status(
         self, org: Organization, document_id: int
@@ -219,6 +249,8 @@ class KnowledgeService:
                     ),
                     page=payload.get(PAYLOAD_PAGE_START),
                     score=round(score, 4),
+                    document_id=payload.get(PAYLOAD_DOCUMENT_ID),
+                    knowledge_base_id=kb.id,
                 )
             )
         return SearchResponse(results=results)

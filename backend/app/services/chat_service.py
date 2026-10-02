@@ -46,6 +46,7 @@ from app.schemas.chat import (
     ConversationCreateRequest,
     ConversationDetail,
     ConversationListItem,
+    ConversationUpdateRequest,
     MessageCreateRequest,
     MessageDetail,
     SseDonePayload,
@@ -107,6 +108,11 @@ def _elapsed_ms(started: float) -> int:
 def _sse(event: str, payload: BaseModel | dict) -> str:
     """SSE 帧序列化：`event: xxx\\ndata: {...}\\n\\n`（非 ASCII 不转义）"""
     data = payload if isinstance(payload, dict) else payload.model_dump()
+    if isinstance(payload, SseDonePayload):
+        # 新增的追溯 ID 对旧/模拟来源为空时省略，避免破坏既有 SSE 字段语义。
+        data["sources"] = [
+            source.model_dump(exclude_none=True) for source in payload.sources
+        ]
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
@@ -189,11 +195,12 @@ class ChatService:
         org: Organization,
         user: User,
         agent_id: int | None,
+        search: str | None,
         limit: int,
         offset: int,
     ) -> list[ConversationListItem]:
         rows = await self.repo.list_by_user_with_last_message(
-            user.id, org.id, agent_id, limit, offset
+            user.id, org.id, agent_id, search, limit, offset
         )
         return [
             ConversationListItem(
@@ -209,6 +216,22 @@ class ChatService:
             )
             for c, agent_name, agent_avatar, preview, last_at in rows
         ]
+
+    async def update_conversation(
+        self,
+        org: Organization,
+        user: User,
+        conversation_id: int,
+        data: ConversationUpdateRequest,
+    ) -> ConversationDetail:
+        conversation, agent_id = await self._get_owned(org, user, conversation_id)
+        conversation.title = data.title.strip()
+        await self.db.commit()
+        await self.db.refresh(conversation)
+        agent = await self.repo.get_agent(agent_id)
+        if agent is None:
+            raise ConversationNotFound()
+        return self._conversation_detail(conversation, agent)
 
     async def get_conversation(
         self, org: Organization, user: User, conversation_id: int
@@ -257,7 +280,9 @@ class ChatService:
         conversation, _ = await self._get_owned(org, user, conversation_id)
         lock = await self._acquire(conversation.id)
         try:
-            return await self._run_generation(org, user, conversation, content)
+            return await self._run_generation(
+                org, user, conversation, content, retry=data.retry
+            )
         finally:
             lock.release()
 
@@ -273,7 +298,9 @@ class ChatService:
         if not content:
             raise MessageContentRequired()
         conversation, _ = await self._get_owned(org, user, conversation_id)
-        ctx, _ = await self._prepare_generation(org, user, conversation, content)
+        ctx, _ = await self._prepare_generation(
+            org, user, conversation, content, retry=data.retry
+        )
         # 锁在 _prepare_generation 内获取并随 ctx 保持；服务实例持有直至 sse_events 结束
         self._stream_ctx = ctx
 
@@ -283,7 +310,9 @@ class ChatService:
         assert ctx is not None, "sse_events 必须先经 prepare_stream"
         lock = self._lock_for(ctx.conversation.id)
         try:
-            done_sources = [source.model_dump() for source in ctx.sources]
+            done_sources = [
+                source.model_dump(exclude_none=True) for source in ctx.sources
+            ]
             try:
                 async for event, payload in self._agent_loop(ctx):
                     if event == "message":
@@ -353,18 +382,26 @@ class ChatService:
         user: User,
         conversation: Conversation,
         content: str,
+        retry: bool = False,
     ) -> tuple[_StreamCtx, asyncio.Lock]:
         """通用生成前置：拿锁 → 校验 Agent 可用 → 加载版本快照 → 组上下文（含 RAG）→ 落库用户消息"""
         lock = await self._acquire(conversation.id)
         try:
-            ctx = await self._build_context(org, user, conversation, content)
+            ctx = await self._build_context(
+                org, user, conversation, content, retry=retry
+            )
         except BaseException:
             lock.release()
             raise
         return ctx, lock
 
     async def _build_context(
-        self, org: Organization, user: User, conversation: Conversation, content: str
+        self,
+        org: Organization,
+        user: User,
+        conversation: Conversation,
+        content: str,
+        retry: bool = False,
     ) -> _StreamCtx:
         agent = await self.repo.get_agent(conversation.agent_id)
         # 启停即时生效（agent 模块 D5）：禁用后拒绝继续对话
@@ -380,6 +417,14 @@ class ChatService:
         history = await self.repo.list_recent_messages(
             conversation.id, settings.CHAT_HISTORY_LIMIT
         )
+        if retry:
+            if (
+                not history
+                or history[-1].role != "user"
+                or history[-1].content != content
+            ):
+                raise MessageContentRequired()
+            history = history[:-1]
         llm_message = [{"role": "system", "content": version.system_prompt}]
         # RAG 步骤（knowledge.md D11）：检索 → 注入（在 system_prompt 之后、历史消息之前）
         rag_config = rag_config_from(version.config_json)
@@ -391,10 +436,11 @@ class ChatService:
         llm_message.append({"role": "user", "content": content})
 
         # 用户消息先行落库（D5）：流中失败/断流后可整体重试
-        await self.repo.create_message(
-            Message(conversation_id=conversation.id, role="user", content=content)
-        )
-        await self.db.commit()
+        if not retry:
+            await self.repo.create_message(
+                Message(conversation_id=conversation.id, role="user", content=content)
+            )
+            await self.db.commit()
         # 供应商路由解析（model-providers.md D2/D4）：provider_id 空 → 三元 None（旧行为）
         provider_base_url, provider_api_key, caps = await self._resolve_provider(
             org, version
@@ -533,6 +579,8 @@ class ChatService:
                             document=item.document,
                             page=item.page,
                             score=item.score,
+                            document_id=item.document_id,
+                            knowledge_base_id=item.knowledge_base_id,
                         )
                     )
         sources = sources[: config.rag_top_k]
@@ -721,10 +769,11 @@ class ChatService:
         user: User,
         conversation: Conversation,
         content: str,
+        retry: bool = False,
     ) -> MessageDetail:
         """同步生成：复用 _build_context 后经 _agent_loop 收集完整回答并落库
         （流式走 prepare_stream/sse_events，两条路径共用同一循环逻辑）"""
-        ctx = await self._build_context(org, user, conversation, content)
+        ctx = await self._build_context(org, user, conversation, content, retry=retry)
         final: dict[str, Any] | None = None
         async for event, payload in self._agent_loop(ctx):
             if event == "done":
@@ -770,7 +819,9 @@ class ChatService:
                     "model_name": version.model_name,
                     "agent_version_id": version.id,
                     "rag": rag_meta,
-                    "sources": [source.model_dump() for source in sources],
+                    "sources": [
+                        source.model_dump(exclude_none=True) for source in sources
+                    ],
                     "tool_calls": tool_trace,
                     "tool_calls_max_rounds": tool_max_rounds,
                 },

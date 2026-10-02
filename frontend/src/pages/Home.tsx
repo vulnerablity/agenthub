@@ -1,6 +1,6 @@
 // pages/Home.tsx
 // 登录后概览页（工作台）：问候 + 统计卡 + 最近执行 + 当前组织 + 快捷入口；无组织时引导创建
-import { useMemo ,useId} from 'react'
+import { useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import Icon from '@/components/Icon'
@@ -24,47 +24,6 @@ import { useOrganizationStore } from '@/stores/organization'
 import { useTools } from '@/hooks/useTools'
 import type { ExecutionStatus } from '@/types'
 
-/** 迷你趋势图（SVG 折线，复用设计稿 spark 风格） */
-function Spark({ values, color }: { values: number[]; color: string }) {
-  const baseId = useId()
-  const id = useMemo(() => `spark-${baseId}`, [])
-  if (values.length < 2) {
-    return (
-      <svg className="spark" viewBox="0 0 86 38" preserveAspectRatio="none" aria-hidden="true">
-        <path
-          d="M0 30 L86 30"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          opacity="0.35"
-        />
-      </svg>
-    )
-  }
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || 1
-  const pts = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * 86
-      const y = 33 - ((v - min) / span) * 26
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
-  return (
-    <svg className="spark" viewBox="0 0 86 38" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={`0,38 ${pts} 86,38`} fill={`url(#${id})`} />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 const STATUS_BADGE: Record<ExecutionStatus, string> = {
   success: 'badge ok',
   error: 'badge err',
@@ -84,10 +43,14 @@ export default function Home() {
   const currentOrg = organizations?.find((org) => org.id === currentOrgId)
   const orgReady = currentOrgId != null
 
-  const { data: agents } = useAgents(currentOrgId, {}, orgReady)
-  const { data: knowledgeBases } = useKnowledgeBases(currentOrgId, orgReady)
-  const { data: tools } = useTools(currentOrgId, orgReady)
-  const { data: executions } = useExecutions(currentOrgId, { limit: 5 }, orgReady)
+  const agentsQuery = useAgents(currentOrgId, {}, orgReady)
+  const knowledgeQuery = useKnowledgeBases(currentOrgId, orgReady)
+  const toolsQuery = useTools(currentOrgId, orgReady)
+  const executionsQuery = useExecutions(currentOrgId, { limit: 5 }, orgReady)
+  const agents = agentsQuery.data
+  const knowledgeBases = knowledgeQuery.data
+  const tools = toolsQuery.data
+  const executions = executionsQuery.data
 
   const monthAdded = useMemo(() => {
     if (!agents) return 0
@@ -107,11 +70,6 @@ export default function Home() {
     [tools],
   )
   const todayItems = executions?.items ?? []
-  const successRate = todayItems.length
-    ? Math.round(
-        (todayItems.filter((e) => e.status === 'success').length / todayItems.length) * 100,
-      )
-    : 0
 
   return (
     <div>
@@ -150,7 +108,6 @@ export default function Home() {
           <p className="delta">
             本月新增 <b className="up">+{monthAdded}</b>
           </p>
-          <Spark values={[3, 5, 4, 6, 7, 6, 8]} color="#5b5bd6" />
         </div>
         <div className="card stat">
           <p className="lbl">
@@ -161,7 +118,6 @@ export default function Home() {
           <p className="delta">
             共 {(knowledgeBases ?? []).length} 个知识库
           </p>
-          <Spark values={[12, 10, 14, 13, 16, 15, 18]} color="#0ea5e9" />
         </div>
         <div className="card stat">
           <p className="lbl">
@@ -170,7 +126,6 @@ export default function Home() {
           </p>
           <p className="val">{tools?.length ?? 0}</p>
           <p className="delta">含 {httpToolCount} 个 HTTP 工具</p>
-          <Spark values={[2, 3, 3, 4, 3, 4, 4]} color="#10b981" />
         </div>
         <div className="card stat">
           <p className="lbl">
@@ -178,15 +133,24 @@ export default function Home() {
             最近执行
           </p>
           <p className="val">{executions?.total ?? 0}</p>
-          <p className="delta">
-            成功率 <b className={successRate >= 90 ? 'up' : 'down'}>{successRate}%</b>
-          </p>
-          <Spark values={[8, 10, 9, 12, 11, 14, 13]} color="#8b5cf6" />
+          <p className="delta">全部执行记录</p>
         </div>
       </div>
 
+      {[agentsQuery, knowledgeQuery, toolsQuery, executionsQuery].some((query) => query.isError) ? (
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-[13px] text-red-700">
+          部分工作台数据加载失败。{[agentsQuery, knowledgeQuery, toolsQuery, executionsQuery]
+            .filter((query) => query.isError)
+            .map((query, index) => (
+              <button key={index} type="button" className="ml-2 underline" onClick={() => void query.refetch()}>
+                重试 {['智能体', '知识库', '工具', '执行记录'][[agentsQuery, knowledgeQuery, toolsQuery, executionsQuery].indexOf(query)]}
+              </button>
+            ))}
+        </div>
+      ) : null}
+
       {currentOrg ? (
-        <div className="grid g3 mt-6" style={{ gridTemplateColumns: '1.6fr 1fr' }}>
+        <div className="home-main-grid grid g3 mt-6">
           {/* 最近执行 */}
           <section className="card">
             <div className="flex-between px-5 pt-4">

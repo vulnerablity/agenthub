@@ -29,6 +29,15 @@ export function useKnowledgeDocuments(
   })
 }
 
+export function useDocumentChunks(orgId: number | null, documentId: number | null, enabled = true) {
+  return useQuery({
+    queryKey: ['org', orgId ?? 0, 'documents', documentId ?? 0, 'chunks'],
+    queryFn: async () => (await knowledgeApi.listChunks(documentId!)).data,
+    enabled: enabled && orgId != null && documentId != null,
+    retry: false,
+  })
+}
+
 export function useDocumentMutations(orgId: number | null, kbId: number | null) {
   const queryClient = useQueryClient()
 
@@ -57,5 +66,10 @@ export function useDocumentMutations(orgId: number | null, kbId: number | null) 
     onSuccess: invalidate,
   })
 
-  return { uploadMutation, deleteDocumentMutation }
+  const reprocessDocumentMutation = useMutation({
+    mutationFn: (documentId: number) => knowledgeApi.reprocessDocument(documentId),
+    onSuccess: invalidate,
+  })
+
+  return { uploadMutation, deleteDocumentMutation, reprocessDocumentMutation }
 }

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.knowledge import RAGSource
 from app.schemas.tool import ToolCallRun
@@ -14,6 +14,18 @@ class ConversationCreateRequest(BaseModel):
 
     agent_id: int
     title: str | None = Field(default=None, max_length=200)
+
+
+class ConversationUpdateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+    @field_validator("title")
+    @classmethod
+    def _normalize_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("会话标题不能为空")
+        return value
 
 
 class ConversationDetail(BaseModel):
@@ -47,6 +59,7 @@ class MessageCreateRequest(BaseModel):
     """发送消息请求（需求 3.5 messages / stream 共用）"""
 
     content: str = Field(min_length=1, max_length=10000)
+    retry: bool = False
 
 
 class MessageDetail(BaseModel):

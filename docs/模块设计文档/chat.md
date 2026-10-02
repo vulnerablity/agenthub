@@ -1,16 +1,16 @@
 # AI Chat 对话模块开发方案
 
 > 本文档描述 AI Chat 对话模块的**当前实际实现**，以代码为准，供后期维护与迭代参考。体例沿用《Agent 智能体管理模块设计文档》（`docs/模块设计文档/agent.md`）。
-> 修订记录：初稿评审后修订 4 项必改（D6 版本绑定会话 / D11 并发互斥 / D12 查询层组织过滤 / 2.5 中断职责分层）+ 4 项建议改（增量输出措辞 / 新增 4 个测试 / Agent 删除生命周期 D14 / LLM 空输出 D13），全部已落地。
-> 需求依据：`docs/需求文档 V1.0.md` 第 3.5（AI Chat 对话）、5.1（用户聊天流程）、4.11/4.12（数据表）及第 7 节 V1 开发范围（Chat + SSE 为必做；RAG / Tool Calling / Execution Log 为独立模块，不在本模块范围，仅预留编排挂点）。
+> 修订记录：2026-10-02 同步当前实现：会话标题更新与标题/消息内容搜索；SSE 重试复用失败请求对应的最后一条用户消息；补充 RAG 引用追溯 ID、助手回答复制与引用知识库入口。另更新既有 RAG / Tool Calling 实际链路说明。
+> 需求依据：`docs/需求文档 V1.0.md` 第 3.5（AI Chat 对话）、5.1（用户聊天流程）、4.11/4.12（数据表）及第 7 节 V1 开发范围；RAG 与工具执行由对应模块接入，本模块负责对话编排和流式呈现。
 
 ## 1. 模块概述
 
 功能清单：
 
-- 会话：创建会话、会话列表（含 Agent 名与最后消息摘要）、删除会话
-- 对话：发送消息（同步 + SSE 流式两种模式）、加载历史消息、流式输出过程中可中止
-- 消息：用户/助手消息落库（含 token_usage），刷新后可恢复历史
+- 会话：创建、搜索（标题或消息内容）、重命名、删除；列表包含 Agent 名与最后消息摘要
+- 对话：同步 / SSE 流式发送、停止生成、失败后重试、加载历史消息
+- 消息：用户/助手消息落库（含 token_usage），刷新后可恢复历史；助手回答可复制，RAG 引用可展开并跳转知识库
 
 产品决策（基线，改动需同步本文档）：
 
@@ -18,8 +18,8 @@
 | --- | --- | --- |
 | D1 | 会话归属**用户私有**：仅创建者可访问其会话，他人（含同组织 owner）访问一律 404 | 需求 4.11 conversations 含 user_id；不泄露会话存在性，沿用 agents 模块 404 约定 |
 | D2 | 会话标题自动生成：取首条用户消息前 30 字符；创建时允许显式指定 title | 需求 4.11 含 title，未定义来源 |
-| D3 | V1 对话编排为「加载会话绑定的 Agent 版本快照 → 直接调用 LLM」，RAG 检索 / Tool 调用以 pipeline 扩展点预留（空步骤列表） | 需求 3.5 仅要求对话与 SSE；5.1 的 4–6 步属知识库 / 工具模块完成后接入 |
-| D4 | SSE 事件协议与需求 3.5 对齐：`message`（增量文本）+ `done`（汇总），另加 `error`（流中失败） | 需求文档示例即此形态，不另造 delta 事件 |
+| D3 | 对话编排读取会话版本快照，按配置执行 RAG 检索与工具调用，再调用 LLM；知识库和工具细节分别由 knowledge / tool-calling 模块维护 | `ChatService` 汇总执行上下文并记录执行步骤 |
+| D4 | SSE 事件包含 `message`（增量文本）、`tool_call` / `tool_result`（工具过程）、`done`（消息、Token、引用及工具汇总）和 `error`（流中失败） | 事件由 `utils/sse.ts` 分发；可选引用追溯 ID 仅在后端来源记录中存在时返回 |
 | D5 | 用户消息在请求开始时落库；助手消息**流式结束一次性落库**（含 token_usage）；流中异常时助手消息不落库，用户消息保留 | 避免逐 token 写库；失败时可整体重试 |
 | D6 | **会话创建时绑定版本快照**：`conversations.agent_version_id = 创建时的 agents.current_version_id`，整个会话生命周期固定使用该版本，发布 / 回滚不影响存量会话；Agent 未启用或无发布版本 → `AGENT_NOT_AVAILABLE` | 评审修订：避免同一会话上下文跨版本、保证「回答由哪个版本生成」可追溯。需求 4.11 未含此字段，属架构增强 |
 | D7 | 需求 3.5 仅列 3 个接口，为满足「查看历史会话」权限与页面可用性，补充列表 / 历史消息 / 会话详情 / 删除 4 个 REST 接口 | 补充接口以「需求补充」标注 |
@@ -30,15 +30,18 @@
 | D12 | 组织隔离**贯穿查询层**：列表 / 详情 / 历史均校验会话经 `agent.organization_id` 归属当前组织，不符返回 404 | 评审修订：用户可属多组织，仅按 user_id 过滤会跨租户泄露 |
 | D13 | LLM 空输出（无任何 delta）不落库 assistant 消息，`done.message_id=null`，前端提示「模型未返回内容」 | 防止空内容消息污染历史 |
 | D14 | Agent 硬删除 → 会话 / 消息随 `agent_id` 级联删除（与 Agent 模块物理删除策略一致，见 agent.md D6）；Agent 改软删除时需复审本策略 | 评审确认：级联清理作为明确产品行为 |
+| D15 | 会话可重命名；搜索参数匹配会话标题或该会话消息内容，仍限定为当前用户且当前组织 | 搜索不会突破 D1 / D12 的数据范围 |
+| D16 | SSE 请求支持 `retry=true`：仅当最后一条已落库消息是相同内容的用户消息时复用该消息重试，不再次创建用户消息；不匹配时拒绝重试 | 防止重复消息并确保重试只针对最近一次失败输入 |
 
 前后端对应关系：
 
 | 功能 | 后端接口 | 前端实现 |
 | --- | --- | --- |
 | 创建会话 | `POST /api/v1/conversations` | `api/conversations.ts` → 对话页「新建」/ Agent 卡片「对话」按钮 |
-| 会话列表 | `GET /api/v1/conversations` `?agent_id=` | `hooks/useConversations.ts` → 对话页左侧列表 |
+| 会话列表 | `GET /api/v1/conversations` `?agent_id=&search=&limit=&offset=` | `hooks/useConversations.ts` → 对话页左侧搜索与列表 |
 | 会话详情 | `GET /api/v1/conversations/{id}` | `hooks/useConversation.ts` |
 | 删除会话 | `DELETE /api/v1/conversations/{id}`（需求补充） | 会话列表项「删除」 |
+| 重命名会话 | `PATCH /api/v1/conversations/{id}` `{title}` | 会话列表项「重命名」 |
 | 历史消息 | `GET /api/v1/conversations/{id}/messages`（需求补充） | `hooks/useConversationMessages.ts` |
 | 发送消息（同步） | `POST /api/v1/conversations/{id}/messages` | 测试 / 非流式回退（前端默认不用） |
 | 流式聊天 | `POST /api/v1/conversations/{id}/stream`（SSE） | `utils/sse.ts` + `hooks/useChatStream.ts` → 对话页主链路 |
@@ -115,20 +118,21 @@ backend/
 - `POST /conversations`（需求 3.5）→ 201
 
   Request `{agent_id: int, title?: string}`；校验 Agent 属当前组织且已启用、有当前发布版本（404/409）→ 读取 `agents.current_version_id` 快照写入 `agent_version_id` → 创建会话（D6）。
-- `GET /conversations?agent_id=&limit=&offset=`（需求补充）→ 会话列表
+- `GET /conversations?agent_id=&search=&limit=&offset=`（需求补充）→ 会话列表；`search` 最长 200 字符，匹配标题或消息内容
 
   返回当前用户的会话，**查询层过滤组织**（D12）：`JOIN agents WHERE c.user_id = :uid AND a.organization_id = :org_id`；`JOIN agents` 同时返回 `agent_name` / `agent_avatar_url`；子查询带出 `last_message_preview`（50 字）与 `last_message_at`；按 `updated_at` 倒序。
 - `GET /conversations/{id}`（需求补充）→ 会话详情（含 agent_name / agent_id / agent_version_id），双条件校验（D1 + D12）
+- `PATCH /conversations/{id}`（需求补充）→ 更新会话标题；标题会 trim，空标题返回 422；双条件校验（D1 + D12）
 - `DELETE /conversations/{id}`（需求补充）→ 204，消息随 CASCADE 清理，双条件校验（D1 + D12）
 - `GET /conversations/{id}/messages?limit=&before_id=`（需求补充）→ 历史消息
 
   按 id 升序切页（`before_id` 向上翻更早消息），V1 默认全量返回（limit 上限 200）。
 - `POST /conversations/{id}/messages`（需求 3.5）→ 同步发送
 
-  Request `{content: str}`，1–10000 字符；Response 为完整 MessageDetail（非流式，直接返回 LLM 完整结果）。语义与 stream 等价，供自动化 / 回退使用。
+  Request `{content: str, retry?: boolean}`，1–10000 字符；`retry=true` 时复用匹配的最后一条用户消息。Response 为完整 MessageDetail（非流式，直接返回 LLM 完整结果）。
 - `POST /conversations/{id}/stream`（需求 3.5）→ `text/event-stream`
 
-  Request 同上。响应头 `Content-Type: text/event-stream; charset=utf-8`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`。
+  Request `{content: str, retry?: boolean}`。响应头 `Content-Type: text/event-stream; charset=utf-8`、`Cache-Control: no-cache`、`X-Accel-Buffering: no`。`done` 含 `message_id`、`token_usage`、`sources`、`tool_calls`；引用项可能含 `document_id` / `knowledge_base_id`，仅有追溯信息时提供。
 
 权限与错误语义：
 
@@ -150,8 +154,14 @@ data: {"delta": "你好"}
 
 data: {"delta": "，世界"}
 
+event: tool_call
+data: {"round": 1, "name": "lookup", "arguments": {}}
+
+event: tool_result
+data: {"round": 1, "name": "lookup", "status": "success", "output": "..."}
+
 event: done
-data: {"message_id": 12, "token_usage": {"prompt_tokens": 21, "completion_tokens": 9, "total_tokens": 30}}
+data: {"message_id": 12, "token_usage": {"prompt_tokens": 21, "completion_tokens": 9, "total_tokens": 30}, "sources": [], "tool_calls": []}
 ```
 
 流中失败：
@@ -164,7 +174,9 @@ data: {"code": "LLM_UPSTREAM_ERROR", "message": "上游 LLM 调用失败"}
 约束：
 
 - 每个 `message` 事件一个 `delta` 片段；客户端按序拼接。
-- `done` 为终止事件，携带落库后的助手消息 id 与 token_usage；LLM 空输出时 `message_id=null`（D13），客户端视为无有效回答。
+- `tool_call` / `tool_result` 是可选的工具过程事件；未触发工具时不会发出过程事件。
+- `done` 为终止事件，携带助手消息 id、token_usage、引用 `sources` 与工具汇总 `tool_calls`；无引用 / 工具时分别为空数组。引用项可带 `document_id` / `knowledge_base_id`，兼容旧来源时可省略。
+- LLM 空输出时 `message_id=null`、`token_usage=null`，客户端视为无有效回答；引用与工具汇总仍回传。
 - 权限 / 会话校验失败发生在流开始前，直接返回统一 JSON 业务错误（不走 SSE）。
 - 异常兜底：生成器捕获所有异常并将 `error` 事件作为最后一个事件（用户消息已落库，可重试）。
 
@@ -195,19 +207,19 @@ class LLMClient:
 
 ### 2.6 对话编排（services/chat_service.py）
 
-`stream_message(org, user, conversation_id, data)` 流程（对应需求 5.1，RAG/Tool 步骤以空列表占位）：
+`stream_message(org, user, conversation_id, data)` 流程（对应需求 5.1；RAG / Tool Calling 由 knowledge 与 tool-calling 模块接入）：
 
 ```python
 # services/chat_service.py
-# 编排骨架：V1 pipeline_steps 为空列表；知识库/工具模块落地后注入 rag_retrieve / tool_call 步骤
+# 编排骨架：加载版本绑定的知识库与 Agent 工具，执行检索 / 工具循环并记录执行步骤
 # 1. 会话双条件校验：归属当前用户（D1）+ agent 归属当前组织（D12），任一不符 → 404
 # 2. 并发互斥：非阻塞获取会话级 asyncio 锁（进程内 dict[int, Lock]），已占用 → 409 CONVERSATION_BUSY（D11）
 # 3. 校验 Agent 启用状态（disabled → 409 AGENT_NOT_AVAILABLE，启停即时生效对齐 agent 模块 D5）；加载会话绑定的版本快照 conversations.agent_version_id（D6），取 system_prompt / 模型参数
 # 4. 组装上下文消息（历史最近 CHAT_HISTORY_LIMIT=20 条 + 本次用户输入）
 # 5. 落库用户消息（role=user）
-# 6. 依序执行 pipeline_steps（V1 为空）
-# 7. LLMClient.chat_stream 逐 delta 产出 → 生成器逐事件转发
-# 8. 收尾：LLM 空输出不落库（D13）；否则落库助手消息 + token_usage；更新会话 updated_at 与标题（首轮）；finally 释放并发锁
+# 6. 按版本配置执行 RAG 检索（失败时结构化降级）并装载启用工具
+# 7. Agent loop 调用 LLM；转发 message / tool_call / tool_result 事件
+# 8. done 时回传 sources / tool_calls；LLM 空输出不落库（D13），否则落库助手消息 + token_usage；finally 释放并发锁
 # 9. 异常：流前抛 AppError（统一 JSON）；流中产出 error 事件并中止
 ```
 
@@ -239,8 +251,8 @@ frontend/src/
 ├─ hooks/useConversationMessages.ts  # 历史消息
 ├─ hooks/useChatStream.ts       # 发送状态机 + 中止（AbortController）
 ├─ pages/chat/Chat.tsx          # 对话页（两态：无会话 = 欢迎态；有会话 = 聊天态）
-├─ components/chat/SessionList.tsx   # 左侧会话列表（新建 / 切换 / 删除）
-├─ components/chat/MessageBubble.tsx # 消息气泡（用户右 / 助手左，Markdown 渲染）
+├─ components/chat/SessionList.tsx   # 左侧会话列表（搜索 / 新建 / 切换 / 重命名 / 删除）
+├─ components/chat/MessageBubble.tsx # 消息气泡（Markdown、复制回答、工具轨迹与 RAG 引用）
 ├─ components/chat/ChatInput.tsx     # 输入区（自适应高度 textarea + 发送 / 停止）
 └─ constants/routes.ts          # 追加 CHAT / CHAT_CONVERSATION 路径与生成函数
 ```
@@ -272,10 +284,11 @@ frontend/src/
 └────────────┴──────────────────────────────────┴───────────────┘
 ```
 
-- 会话列表：新建按钮（创建后入列并选中）、按 last_message_at 倒序、删除（二次确认）
+- 会话列表：标题/消息内容搜索、新建、重命名、删除（二次确认）；列表按最近更新排序
 - 消息流：进入会话先加载历史（React Query），流式增量直接附加在临时 assistant 消息上；自动滚动到底（用户上翻时不强制）
 - 输入区：Enter 发送 / Shift+Enter 换行；流式中按钮切换为「停止」（AbortController 中止，已收到的部分保留）
-- 错误提示：流前错误（404/409/502）以气泡内错误条展示并可「重试」；409 `CONVERSATION_BUSY` 提示「回答生成中，请稍候」；流中 `error` 事件展示错误条
+- 错误提示：流前错误与流中 `error` 事件可见；失败请求可重试且复用已保存的用户消息，停止后可选择重试；生成中的回答可复制
+- RAG 引用：回答下展示可展开的来源片段和页码；存在 KB ID 时提供知识库跳转
 
 ### 3.4 流式消费（utils/sse.ts + useChatStream.ts）
 
@@ -309,12 +322,15 @@ export async function postSse(
 后端 `tests/test_chat.py`（体例对齐 `test_agent.py`，LLM 侧以 `monkeypatch` 替换 `LLMClient.chat_stream` 为假流）：
 
 - 会话：创建（含 title 自动截断、agent_version_id 快照正确）、列表仅见自己、跨用户访问 404、删除级联消息
+- 会话编辑与搜索：重命名后按标题可查；列表搜索同时匹配标题和消息内容；组织 / 用户过滤不变
+- 重试：流失败后 `retry=true` 复用最后一条同内容用户消息；验证不会重复创建 user 消息
 - 组织隔离：同一用户属 Org A + Org B，携带 `X-Organization-Id: A` 的列表 / 详情 / 历史请求不出现 Org B 会话；跨组织直访会话 404（D12，评审新增）
 - 版本快照：会话建于 v1 → 发布 v2 → 该会话继续对话仍使用 v1 的 system_prompt / 模型；新会话使用 v2（D6，评审新增）
 - 权限：viewer 对话 403；无组织头 403；非成员 403
 - 并发：同一会话并发两次 stream，其一 409 `CONVERSATION_BUSY`；流结束后锁释放可再发（D11，评审新增）
 - 发送：空 content 400；Agent 未启用 / 无版本 409
 - 流式：`AsyncClient(transport=ASGITransport)` 读流，断言 `message` 事件序列与 `done` 载荷（message_id、token_usage）；模拟流中异常断言 `error` 事件；模拟客户端断开断言中止且锁释放
+- SSE `done.sources` 中来源 ID 有值时可追溯到知识库；无 ID 的兼容来源省略可选 ID 字段且保留其余事件字段
 - 空输出：LLM 无 delta → 不落库 assistant 消息，`done.message_id=null`（D13，评审新增）
 - 落库：用户消息先落库；助手消息 done 后落库且 token_usage 正确
 
@@ -322,7 +338,7 @@ export async function postSse(
 
 1. 组织内 owner/admin/member 可选择 Agent 开始对话，viewer 不可
 2. 消息**流式增量输出**（按 `delta` 块顺序拼接，不承诺逐字）、可停止；完成后刷新页面历史完整
-3. 会话列表展示标题（自动生成）、摘要与时间；可删除
+3. 会话列表支持搜索与重命名，展示标题、摘要与时间；可删除
 4. 切换 / 重进会话历史不丢；禁用或无版本 Agent 拒绝对话且提示明确
 
 ## 6. 实施步骤

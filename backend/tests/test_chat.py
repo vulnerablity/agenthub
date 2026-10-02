@@ -162,6 +162,67 @@ async def test_create_conversation_snapshots_version(client, monkeypatch):
     assert conv["agent_version_id"] == agent["current_version_detail"]["id"]
 
 
+async def test_conversation_rename_and_search(client):
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = await _create_agent(client, token, org["id"])
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
+    hdr = _hdr(token, org["id"])
+
+    renamed = await client.patch(
+        f"/api/v1/conversations/{conv['id']}",
+        json={"title": "年假政策讨论"},
+        headers=hdr,
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "年假政策讨论"
+    matched = await client.get(
+        "/api/v1/conversations", params={"search": "年假"}, headers=hdr
+    )
+    assert [item["id"] for item in matched.json()] == [conv["id"]]
+    missed = await client.get(
+        "/api/v1/conversations", params={"search": "不存在"}, headers=hdr
+    )
+    assert missed.json() == []
+
+
+async def test_stream_retry_reuses_failed_user_message(client, monkeypatch):
+    await _register(client, "alice@test.com", "alice")
+    token = await _token(client, "alice@test.com")
+    org = await _create_org(client, token)
+    agent = await _create_agent(client, token, org["id"])
+    conv = (await _create_conversation(client, token, org["id"], agent["id"])).json()
+    hdr = _hdr(token, org["id"])
+    monkeypatch.setattr(
+        llm_module.LLMClient,
+        "chat_stream",
+        _fake_chat(["部分内容"], error_after=LLMUpstreamError()),
+    )
+    async with client.stream(
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "请总结文档"},
+        headers=hdr,
+    ) as resp:
+        failed_events = await _read_sse(resp)
+    assert any(event == "error" for event, _ in failed_events)
+
+    monkeypatch.setattr(llm_module.LLMClient, "chat_stream", _fake_chat(["总结完成"]))
+    async with client.stream(
+        "POST",
+        f"/api/v1/conversations/{conv['id']}/stream",
+        json={"content": "请总结文档", "retry": True},
+        headers=hdr,
+    ) as resp:
+        retried_events = await _read_sse(resp)
+    assert any(event == "done" for event, _ in retried_events)
+    history = await client.get(
+        f"/api/v1/conversations/{conv['id']}/messages", headers=hdr
+    )
+    assert [message["role"] for message in history.json()] == ["user", "assistant"]
+
+
 async def test_create_conversation_validation(client):
     await _register(client, "alice@test.com", "alice")
     token = await _token(client, "alice@test.com")

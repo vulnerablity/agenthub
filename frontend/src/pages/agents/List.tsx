@@ -39,7 +39,8 @@ export default function AgentList() {
     name: name || undefined,
     status: status === 'all' ? undefined : status,
   }
-  const { data: agents, isPending } = useAgents(orgId, filter)
+  const agentsQuery = useAgents(orgId, filter)
+  const agents = agentsQuery.data
   const [apiError, setApiError] = useState('')
 
   const canManage = canManageAgent(org?.my_role)
@@ -123,8 +124,10 @@ export default function AgentList() {
 
       {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
-      {isPending ? (
-        <p className="mt-6 muted">加载中…</p>
+      {agentsQuery.isPending ? (
+        <div className="card mt-6 animate-pulse p-6">正在加载智能体…</div>
+      ) : agentsQuery.isError ? (
+        <div className="card mt-6 p-6"><p className="text-red-600">智能体列表加载失败。</p><button type="button" className="btn ghost sm mt-3" onClick={() => void agentsQuery.refetch()}>重试</button></div>
       ) : agents && agents.length > 0 ? (
         <ul className="grid g2 mt-6 xl:grid-cols-3">
           {agents.map((agent) => {

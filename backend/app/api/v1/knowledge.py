@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Response, UploadFile
 from app.api.deps import DbSession, require_header_org_role
 from app.models import Organization, OrganizationMember
 from app.schemas.knowledge import (
+    DocumentChunkItem,
     DocumentListItem,
     DocumentStatusDetail,
     KnowledgeBaseCreateRequest,
@@ -102,6 +103,22 @@ async def delete_document(document_id: int, ctx: AdminCtx, db: DbSession) -> Res
     org, _ = ctx
     await KnowledgeService(db).delete_document(org, document_id)
     return Response(status_code=204)
+
+
+@router.post("/documents/{document_id}/reprocess", response_model=DocumentListItem)
+async def reprocess_document(
+    document_id: int, ctx: AdminCtx, db: DbSession
+) -> DocumentListItem:
+    org, _ = ctx
+    return await KnowledgeService(db).reprocess_document(org, document_id)
+
+
+@router.get("/documents/{document_id}/chunks", response_model=list[DocumentChunkItem])
+async def list_document_chunks(
+    document_id: int, ctx: OrgCtx, db: DbSession
+) -> list[DocumentChunkItem]:
+    org, _ = ctx
+    return await KnowledgeService(db).list_document_chunks(org, document_id)
 
 
 @router.get("/documents/{document_id}/status", response_model=DocumentStatusDetail)

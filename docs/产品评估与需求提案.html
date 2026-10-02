@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentHub 产品评估与需求提案</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236a56d6'/%3E%3Cpath d='M16 6l7 5-7 5-7-5 7-5zm7 10l-7 5-7-5 7-5 7 5zm-7 5l7 5-7 5-7-5 7-5z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f4f5f8; --card:#ffffff; --ink:#191f2e; --muted:#5f6a7d;
+  --hero:#0e1320; --hero-ink:#eef1f8; --hero-muted:#98a3bb;
+  --accent:#6a56d6; --blue:#3f6fe0; --green:#15884f; --amber:#b7791f; --red:#c84444;
+  --line:#e1e5ee; --radius:12px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.72;font-size:14.5px;-webkit-font-smoothing:antialiased}
+.container{max-width:1080px;margin:0 auto;padding:0 28px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ===== Hero ===== */
+.hero{background:var(--hero);color:var(--hero-ink);padding:56px 0 44px;border-bottom:1px solid #232b40}
+.kicker{font-size:12px;letter-spacing:.22em;color:var(--accent);text-transform:uppercase;font-weight:600;margin:0 0 14px}
+h1.display{font-size:38px;line-height:1.25;margin:0 0 14px;font-weight:700;letter-spacing:.01em}
+.hero .sub{color:var(--hero-muted);font-size:15.5px;max-width:760px;margin:0 0 26px}
+.meta{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:30px}
+.meta .chip{background:#1a2236;border:1px solid #2b3650;color:#c6cfE4;border-radius:999px;padding:5px 14px;font-size:12.5px}
+.meta .chip b{color:var(--hero-ink);font-weight:600}
+.tldr{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.tldr .box{background:#141b2e;border:1px solid #28324b;border-radius:var(--radius);padding:18px 18px 16px}
+.tldr .box .t{font-size:12px;letter-spacing:.08em;color:var(--accent);font-weight:600;margin-bottom:8px}
+.tldr .box p{margin:0;font-size:13.5px;color:#c6cfE4;line-height:1.7}
+.tldr .box p strong{color:var(--hero-ink)}
+
+/* ===== 章节 ===== */
+section.block{padding:52px 0 8px}
+.sechead{display:flex;align-items:baseline;gap:14px;margin:0 0 8px}
+.sechead .no{font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.1em}
+.sechead h2{font-size:23px;margin:0;font-weight:700}
+.secdesc{color:var(--muted);font-size:13.5px;margin:0 0 26px;max-width:860px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;margin-bottom:20px}
+.card h3{font-size:16px;margin:0 0 10px}
+.card h3 .tag{display:inline-block;vertical-align:2px;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;margin-right:8px;letter-spacing:.05em}
+.tag.p0{background:#fdecec;color:var(--red)}
+.tag.p1{background:#e8f0fd;color:var(--blue)}
+.tag.p2{background:#eef0f4;color:var(--muted)}
+.tag.ok{background:#e7f5ec;color:var(--green)}
+ul.plain{margin:8px 0 0;padding-left:18px}
+ul.plain li{margin-bottom:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+
+/* 表格 */
+.tblwrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13.5px}
+caption{text-align:left;padding:14px 18px;font-weight:600;font-size:14.5px;border-bottom:1px solid var(--line)}
+th{background:#f8f9fc;text-align:left;padding:10px 12px;font-size:12.5px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid #eef1f7;vertical-align:top}
+tr:last-child td{border-bottom:none}
+td .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.dot.hi{background:var(--green)} .dot.mid{background:var(--amber)} .dot.low{background:var(--red)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.pill.p0{background:#fdecec;color:var(--red)}
+.pill.p1{background:#e8f0fd;color:var(--blue)}
+.pill.p2{background:#eef0f4;color:#59637a}
+.pill.x{background:#e7f5ec;color:var(--green)}
+
+/* 问题清单 */
+.issue{border-left:3px solid var(--line);padding:10px 0 10px 16px;margin:0 0 14px}
+.issue.p0{border-color:var(--red)}
+.issue.p1{border-color:var(--amber)}
+.issue .it{font-weight:600;margin-bottom:3px}
+.issue .it .lvl{font-size:11px;font-weight:700;margin-left:8px;letter-spacing:.06em}
+.issue.p0 .lvl{color:var(--red)} .issue.p1 .lvl{color:var(--amber)}
+.issue p{margin:0;font-size:13.5px;color:var(--muted)}
+.issue p b{color:var(--ink)}
+
+/* 需求块 */
+.req{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px}
+.req .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.req .head .no{font-weight:700;color:var(--accent)}
+.req .head h4{margin:0;font-size:15.5px}
+.req .head .pill{flex:none}
+.req p{margin:8px 0}
+.req .label{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted);margin:10px 0 4px}
+.req .accept{background:#f8f9fc;border-radius:8px;padding:10px 14px;font-size:13px;color:#3c4657;margin:4px 0 0}
+.req .accept b{color:var(--ink)}
+.req.p0{border-top:3px solid var(--red)}
+.req.p1{border-top:3px solid var(--blue)}
+.req.p2{border-top:3px solid #c9cfdd}
+
+/* 时间轴 */
+.timeline{position:relative;margin-top:10px}
+.timeline::before{content:'';position:absolute;left:calc(118px + 14px);top:6px;bottom:6px;width:2px;background:var(--line)}
+.tl-row{display:grid;grid-template-columns:118px 28px 1fr;gap:0;margin-bottom:26px;position:relative}
+.tl-time{font-size:13px;font-weight:700;color:var(--accent);padding-top:2px;text-align:right;padding-right:12px}
+.tl-axis{display:flex;justify-content:center}
+.tl-dot{width:13px;height:13px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 0 0 2px var(--accent);margin-top:3px;z-index:1}
+.tl-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 20px}
+.tl-card h4{margin:0 0 6px;font-size:15px}
+.tl-card p{margin:0 0 8px;font-size:13.5px;color:var(--muted)}
+.tl-card .pills{display:flex;flex-wrap:wrap;gap:6px}
+.tl-card.phase2 .tl-dot-wrap .tl-dot{background:var(--blue);box-shadow:0 0 0 2px var(--blue)}
+.tl-card.phase3 .tl-dot-wrap .tl-dot{background:#8a93a8;box-shadow:0 0 0 2px #8a93a8}
+
+/* 截图附录 */
+.shots{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.shot{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.shot img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover;object-position:top}
+.shot .cap{padding:9px 12px;font-size:12.5px;color:var(--muted)}
+.shot .cap b{color:var(--ink);display:block;font-size:13px;margin-bottom:2px}
+
+footer{margin-top:46px;padding:26px 0 40px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}
+footer p{margin:4px 0}
+
+/* 图表容器 */
+.chart{width:100%;height:400px}
+.chart-note{font-size:12.5px;color:var(--muted);margin-top:10px}
+
+@media (max-width:760px){
+  .container{padding:0 16px}
+  h1.display{font-size:28px}
+  .tldr{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  .shots{grid-template-columns:repeat(2,1fr)}
+  .tl-time{padding-right:8px;font-size:12px}
+  .timeline::before{left:calc(86px + 13px)}
+  .tl-row{grid-template-columns:86px 26px 1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 封面 ===== -->
+<header class="hero">
+  <div class="container">
+    <p class="kicker">Requirements Review · Product Proposal</p>
+    <h1 class="display">AgentHub 产品评估与需求提案</h1>
+    <p class="sub">以企业需求方视角，对 AgentHub 全站页面与功能做一次完整体检：先给出当前产品成熟度评估，再提出下一阶段希望开发方实现的产品内容与验收标准。</p>
+    <div class="meta">
+      <span class="chip">评估对象 <b>AgentHub 企业智能体平台（V1）</b></span>
+      <span class="chip">评估视角 <b>需求方 / 产品负责人</b></span>
+      <span class="chip">日期 <b>2026-10-02</b></span>
+      <span class="chip">范围 <b>全站页面 · 功能 · 体验</b></span>
+    </div>
+    <div class="tldr">
+      <div class="box"><div class="t">总体判断</div><p>工程完成度 <strong>高于</strong> 产品完成度：后端闭环、组织权限、版本管理与可观测链路扎实；对话体验、知识库深度、数据呈现三处短板最影响使用。</p></div>
+      <div class="box"><div class="t">建议节奏</div><p>V1.5 体验补全（约 3 周）→ V1.6 数据与效率（约 1 个月）→ V2.0 平台化（季度级）。先补体验闭环，再谈平台化。</p></div>
+      <div class="box"><div class="t">本轮最该先做</div><p><strong>①</strong> 导航与信息架构重构　<strong>②</strong> AI 对话体验补齐　<strong>③</strong> 知识库文档生命周期管理</p></div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+<!-- ===== 01 总体评估 ===== -->
+<section class="block" id="s1">
+  <div class="sechead"><span class="no">01</span><h2>项目总体评估</h2></div>
+  <p class="secdesc">基于对仓库代码（前端 15 个页面、后端 11 个 API 模块）与页面实际截图的检查，从产品视角给出定位判断、优点与差距。</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>定位判断</h3>
+      <p style="margin:0 0 10px;font-size:13.5px;color:var(--muted)">对标 Dify / Coze 空间 / RAGFlow 一类的企业级 AI Agent 平台。</p>
+      <ul class="plain">
+        <li><b>闭环完整</b>：用户 → Agent → 知识库 → RAG → 工具 → LLM → 执行日志，是能支撑真实业务的底子；</li>
+        <li><b>差异化优势</b>：Agent 版本化（创建/发布/回滚）+ 执行链路全量可观测；</li>
+        <li><b>当前阶段</b>：V1 功能验收基本达成，处于「能用」向「好用」过渡，体验细节与深度功能未跟上工程完成度。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>做对了什么（值得保留）</h3>
+      <ul class="plain">
+        <li>工程交付质量高：一键脚本、Docker、CI/CD、pytest、模块设计文档齐全，接手成本低；</li>
+        <li>组织多租户 + 四角色 RBAC 严谨：owner 转让/解散有保护，角色按组织独立；</li>
+        <li>Agent 版本化是平台级差异点，B 端管理刚需；</li>
+        <li>SSE 流式对话 + 执行日志（LLM/RAG/Tool/Token）为可观测性打了好底子；</li>
+        <li>工具 Schema + 测试运行、知识库检索测试、表单实时预览等小闭环均已落地；</li>
+        <li>需求文档与验收标准齐全，V1/暂缓范围界定清晰。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>主要差距（详见问题清单）</h3>
+    <ul class="plain">
+      <li><b>信息架构</b>：导航归属逻辑不统一，模型供应商页面无导航入口；</li>
+      <li><b>AI 对话</b>：无停止/重试/复制、无引用来源交互、会话不可管理，核心场景体验粗糙；</li>
+      <li><b>知识库</b>：文档生命周期缺失（无文档列表/删除/重解析/分片预览），检索测试结果不可见；</li>
+      <li><b>数据呈现</b>：工作台只有数量卡片，执行监控无图表、无步骤时间线；</li>
+      <li><b>体验基建</b>：加载/空/错三态粗糙，无引导；无个人中心，头像仅支持 URL。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===== 02 页面盘点 ===== -->
+<section class="block" id="s2">
+  <div class="sechead"><span class="no">02</span><h2>页面盘点（15 个页面）</h2></div>
+  <p class="secdesc">按页面逐项评估「完成度」与「主要问题」。完成度：<span class="dot hi" style="margin-left:6px"></span>高　<span class="dot mid"></span>中　<span class="dot low"></span>低（相对该页面应有的产品形态）。</p>
+  <div class="tblwrap">
+  <table>
+    <colgroup><col style="width:13%"><col style="width:20%"><col style="width:9%"><col style="width:46%"><col style="width:12%"></colgroup>
+    <caption>AgentHub 页面体检表</caption>
+    <thead><tr><th>页面</th><th>用途</th><th>完成度</th><th>主要问题 / 建议</th><th>关联需求</th></tr></thead>
+    <tbody>
+      <tr><td>登录 / 注册</td><td>账号入口，注册页有品牌面</td><td><span class="dot hi"></span>高</td><td>注册与「加入组织」割裂：新用户注册后需自己建组织，无邀请码/邀请链接入口；无找回密码。</td><td><span class="pill p1">P1-4</span></td></tr>
+      <tr><td>工作台概览</td><td>全局数据入口</td><td><span class="dot mid"></span>中</td><td>仅数量卡片，无趋势/成本/活跃度；「最近执行成功率 0%」在无数据时表述生硬；快捷入口与侧边栏重复。</td><td><span class="pill p0">P0-5</span></td></tr>
+      <tr><td>我的组织</td><td>组织列表与切换</td><td><span class="dot mid"></span>中</td><td>列表信息少（成员数/创建时间/角色缺失）；多组织切换（OrgSwitcher）体验可再强化。</td><td><span class="pill p0">P0-1</span></td></tr>
+      <tr><td>组织设置</td><td>基础信息 + 危险区</td><td><span class="dot hi"></span>高</td><td>转让/解散保护到位；建议改名提示影响范围、解散增加二次输入确认（已有）。</td><td><span class="pill p0">P0-1</span></td></tr>
+      <tr><td>成员管理</td><td>成员与角色分配</td><td><span class="dot mid"></span>中</td><td>仅按邮箱添加（对方须已注册）；无邀请链路、无角色变更留痕、无成员活跃信息。</td><td><span class="pill p1">P1-4</span></td></tr>
+      <tr><td>智能体列表</td><td>Agent 卡片管理</td><td><span class="dot hi"></span>高</td><td>缺分页、排序与批量操作；卡片信息维度（对话数/最近执行）可增强。</td><td><span class="pill p1">P1-5</span></td></tr>
+      <tr><td>智能体详情</td><td>配置 + 版本 + 工具</td><td><span class="dot hi"></span>高</td><td>版本历史仅列表，无版本间 diff；工具绑定入口较深；无「复制为模板」。</td><td><span class="pill p1">P1-5</span></td></tr>
+      <tr><td>新建/编辑智能体</td><td>配置表单 + 实时预览</td><td><span class="dot hi"></span>高</td><td>头像仅 URL 输入（无上传）；Prompt 无模板/变量提示；预览为静态文本。</td><td><span class="pill p0">P0-4</span></td></tr>
+      <tr><td>新建版本</td><td>版本管理</td><td><span class="dot mid"></span>中</td><td>无法与上一版本对比；发布/回滚缺少影响提示。</td><td><span class="pill p1">P1-5</span></td></tr>
+      <tr><td>AI 对话</td><td>核心使用场景</td><td><span class="dot low"></span>低</td><td>无停止生成/重新生成/复制/删除消息；无 Markdown 渲染增强；RAG 引用来源不可见不可交互；会话不可重命名/归档/搜索。</td><td><span class="pill p0">P0-2</span></td></tr>
+      <tr><td>知识库列表</td><td>KB 管理</td><td><span class="dot mid"></span>中</td><td>「片段 800/100」口径不清（chunk 配置还是统计）；未展示关联的 Agent；无检索质量概览。</td><td><span class="pill p0">P0-3</span></td></tr>
+      <tr><td>知识库详情</td><td>上传 + 检索测试</td><td><span class="dot mid"></span>中</td><td>无文档列表（状态/删除/重解析）；无分片预览；检索测试不展示命中详情（内容/文档/页码/分数）；错误状态不可见。</td><td><span class="pill p0">P0-3</span></td></tr>
+      <tr><td>模型供应商</td><td>LLM 供应商管理</td><td><span class="dot low"></span>低</td><td><b>无导航入口</b>（页面存在但侧边栏不可达）；无模型目录/可用性/用量统计。</td><td><span class="pill p1">P1-3</span></td></tr>
+      <tr><td>工具列表 / 详情</td><td>工具配置与测试</td><td><span class="dot mid"></span>中</td><td>类型覆盖少（当前以 HTTP/计算器为主）；无调用回放、无按角色/Agent 的授权审计。</td><td><span class="pill p1">P1-2</span></td></tr>
+      <tr><td>执行监控</td><td>链路观测</td><td><span class="dot mid"></span>中</td><td>列表无图表与筛选时间范围；详情缺步骤时间线、输入输出展开、Token 汇总、失败一键重试/定位。</td><td><span class="pill p1">P1-1</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="secdesc" style="margin-top:12px">结论：表单类、管理类页面完成度高；「使用类」（对话）与「深度管理类」（知识库/执行/模型）页面是主要缺口。</p>
+</section>
+<!-- __SECTION_PAGES_AFTER__ -->
+
+<!-- ===== 03 模块评估 ===== -->
+<section class="block" id="s3">
+  <div class="sechead"><span class="no">03</span><h2>模块成熟度评估</h2></div>
+  <p class="secdesc">八个功能维度的现状打分（5 分制）。<b>口径</b>：基于本次对代码与界面现状的检查，按「功能完整度 × 体验完成度」定性打分，非系统统计指标。</p>
+  <div class="card">
+    <div class="chart" id="radar" role="img" aria-label="AgentHub 功能模块成熟度雷达图"></div>
+    <p class="chart-note">读图要点：认证/权限、Agent 版本、工程化三块是当前底座；知识库、对话、可观测性的「呈现层」是下一阶段主战场；界面与信息架构拖累了整体体验分。</p>
+  </div>
+</section>
+
+<!-- ===== 04 问题清单 ===== -->
+<section class="block" id="s4">
+  <div class="sechead"><span class="no">04</span><h2>关键问题清单</h2></div>
+  <p class="secdesc">按影响程度排序。P0 为「不做就无法宣称好用」的体验闭环问题；P1 为数据与效率问题。</p>
+
+  <div class="card">
+    <div class="issue p0"><div class="it">问题 1 · 导航信息架构归属混乱<span class="lvl">P0</span></div>
+      <p>「组织设置 / 成员管理」挂在「我的组织」下却又是独立入口；「知识库 / 工具」挂在「智能体」下，层级逻辑不统一；<b>模型供应商页面无任何导航入口</b>，功能被藏在路由里。<b>影响</b>：用户找不到功能，平台能力被浪费。</p></div>
+    <div class="issue p0"><div class="it">问题 2 · AI 对话核心场景体验不完整<span class="lvl">P0</span></div>
+      <p>无停止生成/重新生成/复制/删除；无 Markdown 与代码块渲染增强；<b>需求文档承诺的「查看引用来源」在对话中不可见</b>（RAG 命中无法展示/交互）；会话不可重命名、归档、搜索。<b>影响</b>：这是用户每天用的页面，直接决定留存。</p></div>
+    <div class="issue p0"><div class="it">问题 3 · 知识库文档生命周期缺失<span class="lvl">P0</span></div>
+      <p>上传后无文档列表，无法删除、重新解析；解析失败的原因不可见；无分片（Chunk）预览；检索测试只出 top_k 数字，<b>不展示命中的内容/文档/页码/分数</b>。<b>影响</b>：RAG 效果无法诊断，「企业文档沉淀」的价值打折扣。</p></div>
+    <div class="issue p0"><div class="it">问题 4 · 加载/空/错三态粗糙，缺引导<span class="lvl">P0</span></div>
+      <p>多处出现裸文本「加载中…」；空状态只有一行说明；无错误重试；新用户无 onboarding。<b>影响</b>：第一印象像内部 demo，不像产品。</p></div>
+    <div class="issue p0"><div class="it">问题 5 · 工作台与执行数据呈现浅<span class="lvl">P0</span></div>
+      <p>工作台只有四个数量卡片，无趋势、无 Token/成本、无活跃度；「最近执行成功率 0%」对空数据不友好；执行监控无图表、无步骤时间线。<b>影响</b>：管理者无法回答「用得好不好、花多少钱」。</p></div>
+    <div class="issue p1"><div class="it">问题 6 · 成员协作缺少邀请链路<span class="lvl">P1</span></div>
+      <p>只能按邮箱添加（对方须已注册），无邀请链接/邀请码/待接受状态；角色变更无留痕。影响：组织扩张成本高，安全审计无据可查。</p></div>
+    <div class="issue p1"><div class="it">问题 7 · 工具生态单薄<span class="lvl">P1</span></div>
+      <p>当前以 HTTP/计算器为主，无内置工具库/分类浏览；对话中工具调用无回放标注；无按角色/Agent 授权与调用审计。</p></div>
+    <div class="issue p1"><div class="it">问题 8 · 账户与个人资产缺位<span class="lvl">P1</span></div>
+      <p>无个人中心（改密码/头像/会话管理）；Agent 头像仅支持 URL 输入而非上传；无「我的跨 Agent 会话」总览。</p></div>
+  </div>
+</section>
+<!-- __SECTION_ISSUES_AFTER__ -->
+
+<!-- ===== 05 需求提案 ===== -->
+<section class="block" id="s5">
+  <div class="sechead"><span class="no">05</span><h2>需求提案（下阶段我想做的产品内容）</h2></div>
+  <p class="secdesc">以需求方身份提出。P0 = 下轮迭代必须交付（体验闭环）；P1 = 短期增强（数据与效率）；P2 = 中长期平台化。每条附验收标准，可直接进入开发排期。</p>
+
+  <h3 style="font-size:17px;margin:26px 0 14px;color:var(--red)">P0 · 体验闭环（下轮迭代，约 3 周）</h3>
+
+  <div class="req p0">
+    <div class="head"><span class="no">P0-1</span><h4>导航与信息架构重构</h4><span class="pill p0">P0</span></div>
+    <p><b>需求</b>：统一侧边栏归属逻辑：一级导航固定为「工作台 / 我的组织 / 智能体 / 知识库 / 工具 / 运行 / 模型管理」，组织设置与成员管理收归组织详情或组织切换器内，删除重复入口；补齐「模型管理」导航项；OrgSwitcher 展示组织角色与成员数。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 全站无重复入口、无死链；<b>·</b> 模型供应商页可从导航直达；<b>·</b> 任何页面 ≤ 3 次点击可达；<b>·</b> 侧边栏按角色（owner/admin/member/viewer）正确显隐管理项。</div>
+  </div>
+
+  <div class="req p0">
+    <div class="head"><span class="no">P0-2</span><h4>AI 对话体验补齐</h4><span class="pill p0">P0</span></div>
+    <p><b>需求</b>：消息操作（复制 / 重新生成 / 停止生成 / 删除）；Markdown、代码块高亮与流式渲染；<b>引用来源卡片</b>——RAG 命中的文档/分片以可点击卡片展示，点击展开内容与页码，可跳转知识库文档；会话管理（重命名 / 归档 / 删除 / 搜索历史会话 / 清空上下文）；上下文长度指示。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 生成中可停止、停止后可重新生成；<b>·</b> 命中知识库的回答必须带可展开的引用来源；<b>·</b> 会话可重命名/归档/搜索；<b>·</b> 代码块可复制、可高亮。</div>
+  </div>
+
+  <div class="req p0">
+    <div class="head"><span class="no">P0-3</span><h4>知识库文档生命周期管理</h4><span class="pill p0">P0</span></div>
+    <p><b>需求</b>：文档管理列表（文件名/大小/状态：解析中·成功·失败/错误原因），支持删除、重新解析；分片（Chunk）预览与数量统计；检索测试结果可视化——展示命中片段内容、所属文档、页码、分数，支持调整 top_k 与相似度阈值；KB 与已关联 Agent 的关系展示。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 上传 → 解析 → 失败/成功全状态可见且可操作；<b>·</b> 检索测试必须返回「内容/文档/页码/分数」四要素；<b>·</b> 删除文档后向量库同步清理；<b>·</b> 文档更新可增量重解析。</div>
+  </div>
+
+  <div class="req p0">
+    <div class="head"><span class="no">P0-4</span><h4>个人中心与体验三态</h4><span class="pill p0">P0</span></div>
+    <p><b>需求</b>：个人中心（头像上传、修改密码、我的会话、退出全部设备）；Agent/组织头像支持本地上传；全局统一加载骨架屏、空状态插画与引导文案、错误重试按钮；新用户 onboarding（建组织 → 建 Agent → 传文档 → 发起对话四步引导）。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 头像可上传且格式/大小有校验；<b>·</b> 全站无裸「加载中…」文本；<b>·</b> 每个空状态给出下一步动作；<b>·</b> 新注册用户可见四步引导。</div>
+  </div>
+
+  <div class="req p0">
+    <div class="head"><span class="no">P0-5</span><h4>工作台数据升级</h4><span class="pill p0">P0</span></div>
+    <p><b>需求</b>：工作台增加近 7/30 日趋势图（执行量、成功率、平均耗时）；Token 消耗与估算成本；最活跃 Agent / 知识库排行；「最近执行」列表可直接点击进入详情。空数据时给出引导而非「成功率 0%」。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 三张趋势图数据来自执行日志且时间范围可切换；<b>·</b> 成本按「输入/输出 Token × 单价」可解释；<b>·</b> 空数据态与有数据态分别有正确表达。</div>
+  </div>
+
+  <h3 style="font-size:17px;margin:26px 0 14px;color:var(--blue)">P1 · 数据与效率（短期迭代，约 1 个月）</h3>
+
+  <div class="req p1">
+    <div class="head"><span class="no">P1-1</span><h4>执行监控可视化</h4><span class="pill p1">P1</span></div>
+    <p>详情页升级为步骤时间线：LLM / RAG / Tool 各步骤的输入输出可展开、耗时与 Token 逐项列出；列表支持时间范围/Agent/状态筛选与 CSV 导出；失败执行可一键定位到对应对话并重试。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 一次执行的每一步骤均可展开看入参/出参/耗时；<b>·</b> 可按时间范围导出；<b>·</b> 失败项可直接跳到对话上下文。</div>
+  </div>
+
+  <div class="req p1">
+    <div class="head"><span class="no">P1-2</span><h4>工具生态扩展</h4><span class="pill p1">P1</span></div>
+    <p>内置工具库分类浏览（计算 / 搜索 / 天气 / 数据库 / HTTP / 自定义函数）；对话中工具调用以气泡标注（如「已调用 汇率查询 · 12ms」）并可展开入参出参；工具按角色与 Agent 双重授权，调用留痕。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 至少内置 5 类工具模板；<b>·</b> 对话气泡可看到工具调用过程；<b>·</b> 执行日志可按工具维度检索。</div>
+  </div>
+
+  <div class="req p1">
+    <div class="head"><span class="no">P1-3</span><h4>模型管理增强</h4><span class="pill p1">P1</span></div>
+    <p>模型供应商页进入导航；增加模型目录（按供应商/能力/上下文长度浏览）；每个 Agent 展示模型可用性状态；供应商用量统计（按模型/日期）；密钥加密与权限提示清晰化。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 导航直达；<b>·</b> 新建 Agent 时可按能力筛选模型；<b>·</b> 用量报表按供应商/模型/日期可查。</div>
+  </div>
+
+  <div class="req p1">
+    <div class="head"><span class="no">P1-4</span><h4>成员协作与邀请</h4><span class="pill p1">P1</span></div>
+    <p>邀请链接/邀请码（含有效期与角色预设），未注册邮箱可先邀请、注册后自动入组；角色变更留痕（操作者/时间/前后角色）；成员列表显示最近活跃与资源归属。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 被邀请者注册后自动加入组织并获预设角色；<b>·</b> 角色变更可在组织审计中追溯。</div>
+  </div>
+
+  <div class="req p1">
+    <div class="head"><span class="no">P1-5</span><h4>Agent 模板库与版本对比</h4><span class="pill p1">P1</span></div>
+    <p>行业模板（客服 / 数据分析 / 文档问答 / 工单分类）一键创建；任意 Agent 可「存为模板」；版本历史支持两版本 diff（Prompt/模型/参数高亮差异）；列表支持分页与批量停用。</p>
+    <div class="label">验收标准</div>
+    <div class="accept"><b>·</b> 模板创建后一次配置即可对话；<b>·</b> 版本 diff 可见字段级差异。</div>
+  </div>
+
+  <h3 style="font-size:17px;margin:26px 0 14px;color:var(--muted)">P2 · 平台化（中长期，季度级）</h3>
+
+  <div class="req p2">
+    <div class="head"><span class="no">P2-1</span><h4>工作流编排</h4><span class="pill p2">P2</span></div>
+    <p>可视化工作流画布：多步骤、条件分支、人工审核节点、并行执行；节点可复用已有 Agent/工具/知识库检索；支持导入导出工作流定义（JSON）。</p>
+  </div>
+  <div class="req p2">
+    <div class="head"><span class="no">P2-2</span><h4>多 Agent 协作与记忆</h4><span class="pill p2">P2</span></div>
+    <p>子 Agent / 编排 Agent（manager-worker 模式）；会话记忆与长期记忆库（按用户/组织维度沉淀可检索的事实）；记忆的开启/清空/审计由管理员控制。</p>
+  </div>
+  <div class="req p2">
+    <div class="head"><span class="no">P2-3</span><h4>自动化触发</h4><span class="pill p2">P2</span></div>
+    <p>定时任务与 Webhook 触发 Agent 执行（如每日 9:00 生成经营摘要推送）；触发记录并入执行日志；失败重试策略可配置。</p>
+  </div>
+  <div class="req p2">
+    <div class="head"><span class="no">P2-4</span><h4>API Keys、配额与审计</h4><span class="pill p2">P2</span></div>
+    <p>组织级 API Key 管理与按 Key 配额/限流；全量审计日志（登录/资源变更/工具调用/权限变更）；为商业化（套餐/计费）预留数据底座。</p>
+  </div>
+  <div class="req p2">
+    <div class="head"><span class="no">P2-5</span><h4>国际化与移动端</h4><span class="pill p2">P2</span></div>
+    <p>i18n（中/英优先，文案抽离）；移动端 H5 适配（对话与监控优先）；无障碍与深色模式。</p>
+  </div>
+</section>
+<!-- __SECTION_REQ_AFTER__ -->
+
+<!-- ===== 06 路线图 ===== -->
+<section class="block" id="s6">
+  <div class="sechead"><span class="no">06</span><h2>迭代路线图</h2></div>
+  <p class="secdesc">建议的开发节奏：先补体验闭环（P0），再上数据与效率（P1），平台化能力（P2）按季度滚动。</p>
+  <div class="timeline">
+    <div class="tl-row">
+      <div class="tl-time">阶段一<br>2026-10</div>
+      <div class="tl-axis"><span class="tl-dot"></span></div>
+      <div class="tl-card phase1">
+        <h4>V1.5 · 体验补全</h4>
+        <p>导航重构、对话体验补齐、知识库文档生命周期、个人中心与三态、工作台数据升级。目标：从「能跑通」到「好用」，核心闭环无体验死角。</p>
+        <div class="pills"><span class="pill p0">P0-1</span><span class="pill p0">P0-2</span><span class="pill p0">P0-3</span><span class="pill p0">P0-4</span><span class="pill p0">P0-5</span></div>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-time">阶段二<br>2026-11 ~ 12</div>
+      <div class="tl-axis"><span class="tl-dot" style="background:var(--blue);box-shadow:0 0 0 2px var(--blue)"></span></div>
+      <div class="tl-card phase2">
+        <h4>V1.6 · 数据与效率</h4>
+        <p>执行监控可视化、工具生态、成员邀请、模型管理、模板库与版本对比。目标：让管理者看得清、让用户建得快、让团队扩得动。</p>
+        <div class="pills"><span class="pill p1">P1-1</span><span class="pill p1">P1-2</span><span class="pill p1">P1-3</span><span class="pill p1">P1-4</span><span class="pill p1">P1-5</span></div>
+      </div>
+    </div>
+    <div class="tl-row">
+      <div class="tl-time">阶段三<br>2027 Q1 起</div>
+      <div class="tl-axis"><span class="tl-dot" style="background:#8a93a8;box-shadow:0 0 0 2px #8a93a8"></span></div>
+      <div class="tl-card phase3">
+        <h4>V2.0 · 平台化</h4>
+        <p>工作流编排、多 Agent 协作、Agent 记忆、自动化触发、API Keys 与配额、审计与数据看板、国际化。目标：从「工具」成为「平台」，支撑商业化。</p>
+        <div class="pills"><span class="pill p2">P2-1</span><span class="pill p2">P2-2</span><span class="pill p2">P2-3</span><span class="pill p2">P2-4</span><span class="pill p2">P2-5</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 07 验收标准 ===== -->
+<section class="block" id="s7">
+  <div class="sechead"><span class="no">07</span><h2>下轮迭代验收标准</h2></div>
+  <p class="secdesc">P0 需求全部交付后，需求方将按下述清单逐项验收，全部通过才视为迭代完成。</p>
+  <div class="card">
+    <ul class="plain">
+      <li><b>导航</b>：全站无重复入口、无死链；模型管理可从导航直达；任何页面 ≤ 3 次点击可达；</li>
+      <li><b>对话</b>：可停止、可重新生成、可复制；命中知识库的回答带可展开的引用来源；会话可重命名/归档/搜索；</li>
+      <li><b>知识库</b>：文档全状态可见可操作；检索测试返回内容/文档/页码/分数；删除文档同步清理向量；</li>
+      <li><b>账户与三态</b>：头像可上传；全站无裸「加载中…」；每个空状态有下一步动作；新用户有四步引导；</li>
+      <li><b>工作台</b>：7/30 日趋势图可用；成本口径可解释；空数据态表达正确；</li>
+      <li><b>回归</b>：既有 pytest 全部通过；新增用例覆盖对话引用、文档生命周期、导航权限；</li>
+      <li><b>体验</b>：桌面与移动端（H5 适配范围）均无布局破损；关键操作响应 ≤ 300ms（本地环境）。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===== 08 附录 ===== -->
+<section class="block" id="s8">
+  <div class="sechead"><span class="no">08</span><h2>附录 · 页面证据截图</h2></div>
+  <p class="secdesc">以下截图来自 <code>frontend/shots/</code>，为本次评估依据的一部分；点击可在仓库中查看原图（相对路径，需与仓库一同保留）。</p>
+  <div class="shots">
+    <figure class="shot"><img src="../frontend/shots/home.png" alt="工作台概览截图" loading="lazy"><figcaption class="cap"><b>工作台概览</b>数量卡片为主，缺趋势与成本</figcaption></figure>
+    <figure class="shot"><img src="../frontend/shots/agents.png" alt="智能体管理截图" loading="lazy"><figcaption class="cap"><b>智能体管理</b>卡片+筛选，完成度较高</figcaption></figure>
+    <figure class="shot"><img src="../frontend/shots/chat.png" alt="AI对话截图" loading="lazy"><figcaption class="cap"><b>AI 对话</b>空态入口，待补齐体验闭环</figcaption></figure>
+    <figure class="shot"><img src="../frontend/shots/knowledge.png" alt="知识库截图" loading="lazy"><figcaption class="cap"><b>知识库</b>列表维度单一，深度管理缺失</figcaption></figure>
+    <figure class="shot"><img src="../frontend/shots/agent_detail.png" alt="智能体详情截图" loading="lazy"><figcaption class="cap"><b>智能体详情</b>版本+工具，结构清晰</figcaption></figure>
+    <figure class="shot"><img src="../frontend/shots/executions.png" alt="执行监控截图" loading="lazy"><figcaption class="cap"><b>执行监控</b>空数据，缺图表与时间线</figcaption></figure>
+    <figure class="shot"><img src="../frontend/shots/tool_detail.png" alt="工具详情截图" loading="lazy"><figcaption class="cap"><b>工具详情</b>Schema+测试，基础可用</figcaption></figure>
+    <figure class="shot"><img src="../frontend/shots/organizations.png" alt="我的组织截图" loading="lazy"><figcaption class="cap"><b>我的组织</b>创建入口，列表信息可增强</figcaption></figure>
+  </div>
+</section>
+
+</main>
+
+<footer class="container">
+  <p>本文档基于对 AgentHub 仓库（前端页面、后端 API、需求文档 V1.0）及页面截图的检查生成，2026-10-02。</p>
+  <p>所有评分为定性评估结论（口径见各图表说明），非系统统计指标；页面截图来自 <code>frontend/shots/</code>，可通过相对路径查看原图。</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script>
+(function(){
+  var el = document.getElementById('radar');
+  if (!el || typeof echarts === 'undefined') return;
+  var chart = echarts.init(el);
+  var option = {
+    title: { text: 'AgentHub 功能模块成熟度评估', left: 'center', top: 10, textStyle: { fontSize: 15, fontWeight: 600 } },
+    tooltip: { trigger: 'item', triggerOn: 'mousemove|click', renderMode: 'richText', confine: true },
+    radar: {
+      indicator: [
+        { name: '认证与组织权限', max: 5 },
+        { name: 'Agent配置与版本', max: 5 },
+        { name: '知识库与RAG', max: 5 },
+        { name: 'AI对话体验', max: 5 },
+        { name: '工具调用', max: 5 },
+        { name: '执行可观测性', max: 5 },
+        { name: '界面与信息架构', max: 5 },
+        { name: '工程化与交付', max: 5 }
+      ],
+      center: ['50%', '55%'],
+      radius: '62%',
+      splitNumber: 5,
+      axisName: { fontSize: 11, color: '#5f6a7d' },
+      axisLine: { lineStyle: { color: '#d5dae6' } },
+      splitLine: { lineStyle: { color: '#e1e5ee' } },
+      splitArea: { areaStyle: { color: ['#fafbfd', '#f2f4f9'] } }
+    },
+    series: [{
+      type: 'radar',
+      symbolSize: 5,
+      data: [{ value: [4.5, 4.5, 3, 3, 3, 3, 3, 5], name: '现状评估' }]
+    }]
+  };
+  chart.setOption(option);
+  window.addEventListener('resize', function(){ chart.resize(); });
+})();
+</script>
+</body>
+</html>

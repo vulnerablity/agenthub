@@ -12,7 +12,7 @@ export const conversationApi = {
   create(data: ConversationCreateRequest) {
     return http.post<ConversationDetail>('/conversations', data)
   },
-  list(params?: { agent_id?: number; limit?: number; offset?: number }) {
+  list(params?: { agent_id?: number; limit?: number; offset?: number; search?: string }) {
     return http.get<ConversationListItem[]>('/conversations', { params })
   },
   get(conversationId: number) {
@@ -20,6 +20,9 @@ export const conversationApi = {
   },
   remove(conversationId: number) {
     return http.delete(`/conversations/${conversationId}`)
+  },
+  update(conversationId: number, data: { title: string }) {
+    return http.patch<ConversationDetail>(`/conversations/${conversationId}`, data)
   },
   listMessages(conversationId: number, params?: { limit?: number; before_id?: number }) {
     return http.get<MessageDetail[]>(`/conversations/${conversationId}/messages`, {

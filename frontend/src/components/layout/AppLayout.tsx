@@ -93,27 +93,7 @@ export default function AppLayout() {
             我的组织
           </NavLink>
 
-          {canManageOrganization || orgNavDisabled ? <>
-            <div className="nav-group">组织</div>
-            {orgNavDisabled ? (
-              <OrgDisabledItem icon="settings" label="组织设置" />
-            ) : canManageOrganization ? (
-              <NavLink to={orgSettingsPath(currentOrgId!)} className={navLinkClass}>
-                <Icon name="settings" className="ic" />
-                组织设置
-              </NavLink>
-            ) : null}
-            {orgNavDisabled ? (
-              <OrgDisabledItem icon="users" label="成员管理" />
-            ) : canManageOrganization ? (
-              <NavLink to={orgMembersPath(currentOrgId!)} className={navLinkClass}>
-                <Icon name="users" className="ic" />
-                成员管理
-              </NavLink>
-            ) : null}
-          </> : null}
-
-          <div className="nav-group">智能体</div>
+          <div className="nav-group">资源构建</div>
           {orgNavDisabled ? (
             <OrgDisabledItem icon="bot" label="智能体管理" />
           ) : (
@@ -147,7 +127,7 @@ export default function AppLayout() {
             </NavLink>
           )}
 
-          <div className="nav-group">运行</div>
+          <div className="nav-group">运行与监控</div>
           {orgNavDisabled ? (
             <OrgDisabledItem icon="chat" label="AI 对话" />
           ) : (
@@ -165,6 +145,25 @@ export default function AppLayout() {
               执行监控
             </NavLink>
           ) : null}
+          {canManageOrganization || orgNavDisabled ? <>
+            <div className="nav-group">组织管理</div>
+            {orgNavDisabled ? (
+              <OrgDisabledItem icon="settings" label="组织设置" />
+            ) : canManageOrganization ? (
+              <NavLink to={orgSettingsPath(currentOrgId!)} className={navLinkClass}>
+                <Icon name="settings" className="ic" />
+                组织设置
+              </NavLink>
+            ) : null}
+            {orgNavDisabled ? (
+              <OrgDisabledItem icon="users" label="成员管理" />
+            ) : canManageOrganization ? (
+              <NavLink to={orgMembersPath(currentOrgId!)} className={navLinkClass}>
+                <Icon name="users" className="ic" />
+                成员管理
+              </NavLink>
+            ) : null}
+          </> : null}
         </nav>
 
         <div className="sb-foot">

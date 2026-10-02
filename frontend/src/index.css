@@ -1599,6 +1599,24 @@ table.tbl {
   }
 }
 
+.kb-detail-grid {
+  grid-template-columns: minmax(0, 1fr) 400px;
+}
+.home-main-grid {
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+}
+@media (max-width: 900px) {
+  .kb-detail-grid,
+  .home-main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  .chat-side {
+    width: 100% !important;
+  }
+}
+
 /* ================= 统计卡别名（stat-label / stat-value） ================= */
 .stat .stat-label {
   font-size: 12px;

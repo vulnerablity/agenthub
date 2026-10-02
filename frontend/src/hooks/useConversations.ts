@@ -4,13 +4,13 @@ import { useQuery } from '@tanstack/react-query'
 
 import { conversationApi } from '@/api'
 
-export const conversationsQueryKey = (orgId: number) =>
-  ['org', orgId, 'conversations'] as const
+export const conversationsQueryKey = (orgId: number, search = '') =>
+  ['org', orgId, 'conversations', search] as const
 
-export function useConversations(orgId: number | null, enabled = true) {
+export function useConversations(orgId: number | null, enabled = true, search = '') {
   return useQuery({
-    queryKey: conversationsQueryKey(orgId ?? 0),
-    queryFn: async () => (await conversationApi.list()).data,
+    queryKey: conversationsQueryKey(orgId ?? 0, search),
+    queryFn: async () => (await conversationApi.list(search ? { search } : undefined)).data,
     enabled: enabled && orgId != null,
     retry: false,
   })
