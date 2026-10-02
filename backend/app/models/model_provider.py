@@ -52,7 +52,5 @@ class ModelProvider(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "organization_id", "name", name="uq_model_provider_org_name"
-        ),
+        UniqueConstraint("organization_id", "name", name="uq_model_provider_org_name"),
     )

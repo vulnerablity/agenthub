@@ -159,7 +159,9 @@ async def test_resolve_provider_custom_model_defaults(db, scene):
 async def test_resolve_provider_disabled_and_bad_key(db, scene):
     """供应商停用 → 502；密文损坏 → 502 ProviderKeyInvalid"""
     service = ChatService(db)
-    version = await scene["make_version"](scene["disabled_provider"].id, "deepseek-chat")
+    version = await scene["make_version"](
+        scene["disabled_provider"].id, "deepseek-chat"
+    )
     with pytest.raises(ModelProviderDisabled):
         await service._resolve_provider(scene["org"], version)
     # 破坏密文

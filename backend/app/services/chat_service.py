@@ -452,10 +452,7 @@ class ChatService:
         if version.provider_id is None:
             return None, None, None
         provider = await self.db.get(ModelProvider, version.provider_id)
-        if (
-            provider is None
-            or provider.organization_id != org.id
-        ):
+        if provider is None or provider.organization_id != org.id:
             raise ModelProviderNotFound()
         if not provider.enabled:
             raise ModelProviderDisabled()
