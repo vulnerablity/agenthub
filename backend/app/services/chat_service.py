@@ -44,9 +44,9 @@ from app.repositories.conversation_repo import ConversationRepository
 from app.repositories.tool_repo import ToolRepository
 from app.schemas.chat import (
     ConversationCreateRequest,
-    ConversationUpdateRequest,
     ConversationDetail,
     ConversationListItem,
+    ConversationUpdateRequest,
     MessageCreateRequest,
     MessageDetail,
     SseDonePayload,

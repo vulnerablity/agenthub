@@ -34,8 +34,8 @@ from app.integrations.vector_store import (
 from app.models import Document, KnowledgeBase, Organization
 from app.repositories.knowledge_repo import KnowledgeRepository
 from app.schemas.knowledge import (
-    DocumentListItem,
     DocumentChunkItem,
+    DocumentListItem,
     DocumentStatusDetail,
     KnowledgeBaseCreateRequest,
     KnowledgeBaseDetail,

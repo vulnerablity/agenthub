@@ -12,9 +12,9 @@ from app.schemas.chat import (
     ConversationCreateRequest,
     ConversationDetail,
     ConversationListItem,
+    ConversationUpdateRequest,
     MessageCreateRequest,
     MessageDetail,
-    ConversationUpdateRequest,
 )
 from app.services.chat_service import ChatService
 

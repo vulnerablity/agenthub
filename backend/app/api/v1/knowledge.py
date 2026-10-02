@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, Response, UploadFile
 from app.api.deps import DbSession, require_header_org_role
 from app.models import Organization, OrganizationMember
 from app.schemas.knowledge import (
-    DocumentListItem,
     DocumentChunkItem,
+    DocumentListItem,
     DocumentStatusDetail,
     KnowledgeBaseCreateRequest,
     KnowledgeBaseDetail,
