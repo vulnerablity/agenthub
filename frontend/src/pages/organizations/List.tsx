@@ -130,7 +130,7 @@ export default function OrganizationList() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="page-head">
+      {/* <div className="page-head">
         <div>
           <h1 className="page-title">我的组织</h1>
           <p className="page-sub">浏览和切换已加入的组织；管理入口仅对 owner/admin 开放</p>
@@ -143,7 +143,38 @@ export default function OrganizationList() {
           <Icon name="plus" className="ic" />
           创建组织
         </button>
-      </div>
+      </div> */}
+
+      <form
+        id="create-org-form"
+        onSubmit={onSubmit}
+        noValidate
+        className="card card-pad mt-6"
+      >
+        <h3 className="card-title">
+          <Icon name="building" className="ic" />
+          创建组织
+        </h3>
+        <p className="card-sub mt-1">创建后您将成为该组织的企业拥有者</p>
+        <div className="mt-4 flex items-end gap-3">
+          <div className="flex-1">
+            <TextField
+              label="组织名称"
+              placeholder="例如：Acme 团队"
+              error={errors.name?.message}
+              {...register('name')}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={createMutation.isPending}
+            className="btn primary"
+          >
+            {createMutation.isPending ? '创建中…' : '创建'}
+          </button>
+        </div>
+        {apiError ? <p className="mt-3 text-[13px] text-red-500">{apiError}</p> : null}
+      </form>
 
       {isPending ? (
         <p className="mt-6 muted">加载中…</p>
@@ -215,36 +246,7 @@ export default function OrganizationList() {
         </div>
       )}
 
-      <form
-        id="create-org-form"
-        onSubmit={onSubmit}
-        noValidate
-        className="card card-pad mt-6"
-      >
-        <h3 className="card-title">
-          <Icon name="building" className="ic" />
-          创建组织
-        </h3>
-        <p className="card-sub mt-1">创建后您将成为该组织的企业拥有者</p>
-        <div className="mt-4 flex items-end gap-3">
-          <div className="flex-1">
-            <TextField
-              label="组织名称"
-              placeholder="例如：Acme 团队"
-              error={errors.name?.message}
-              {...register('name')}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="btn primary"
-          >
-            {createMutation.isPending ? '创建中…' : '创建'}
-          </button>
-        </div>
-        {apiError ? <p className="mt-3 text-[13px] text-red-500">{apiError}</p> : null}
-      </form>
+
     </div>
   )
 }

@@ -311,10 +311,10 @@ export default function Chat() {
               isLoading={conversationsQuery.isPending}
               loadError={conversationsQuery.isError}
               onRetryLoad={() => void conversationsQuery.refetch()}
-              onNewChat={() => navigate(chatPath(orgId))}
-              onToggleSidebar={() => {setSidebarOpen(false)
-                setSidebarWidth(SIDEBAR_DEFAULT)
-              }}
+              // onNewChat={() => navigate(chatPath(orgId))}
+              // onToggleSidebar={() => {setSidebarOpen(false)
+              //   setSidebarWidth(SIDEBAR_DEFAULT)
+              // }}
             />
           </div>
           <div className="chat-resizer" onMouseDown={startResize} title="拖动调整宽度" />
@@ -323,22 +323,39 @@ export default function Chat() {
 
       <div className="chat-main">
         <header className="chat-head">
-          {!sidebarOpen ? (
+          
+          {/* {!sidebarOpen ? ( */}
             <button
               type="button"
               className="head-side-btn"
               title="展开侧边栏"
-              onClick={() => setSidebarOpen(true)}
+              onClick={() =>
+              {
+                if (sidebarOpen) {
+                  setSidebarOpen(false)
+                  setSidebarWidth(SIDEBAR_DEFAULT)
+                  setSessionSearch('')
+                } else {
+                  setSidebarOpen(true)
+                }
+              }
+              }
             >
               <Icon name="panel-left" className="ic" />
             </button>
-          ) : (
-            <span />
-          )}
+           <button type="button" className="head-side-btn" onClick={() => {
+             navigate(chatPath(orgId))
+             setSessionSearch('')
+           }}>
+          <Icon name="square-pen" className="ic" />
+        </button>
+          {/* // ) : (
+          //   <span />
+          // )} */}
           <div className="ch-title">
             {conversation ? (
               <>
-                {conversation.agent_avatar_url ? (
+                {/* {conversation.agent_avatar_url ? (
                   <img
                     src={conversation.agent_avatar_url}
                     alt=""
@@ -348,7 +365,7 @@ export default function Chat() {
                   <span className={`avatar sm ${avatarTone(conversation.agent_name)}`}>
                     {conversation.agent_name.slice(0, 1).toUpperCase()}
                   </span>
-                )}
+                )} */}
                 <h2 className="ch-name">{conversation.agent_name}</h2>
                 {conversationAgent?.status !== 'enabled' ? (
                   <span className="badge off">智能体已停用，无法继续对话</span>
@@ -480,10 +497,10 @@ export default function Chat() {
 }
 
 /** 根据名称稳定映射头像渐变 */
-function avatarTone(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) % 997
-  }
-  return `av-${(hash % 6) + 1}`
-}
+// function avatarTone(name: string): string {
+//   let hash = 0
+//   for (let i = 0; i < name.length; i += 1) {
+//     hash = (hash * 31 + name.charCodeAt(i)) % 997
+//   }
+//   return `av-${(hash % 6) + 1}`
+// }

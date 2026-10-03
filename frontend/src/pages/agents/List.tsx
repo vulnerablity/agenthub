@@ -77,12 +77,12 @@ export default function AgentList() {
   return (
     <div>
       <div className="page-head">
-        <div>
+        {/* <div>
           <h1 className="page-title">智能体管理</h1>
           <p className="page-sub">
             {org ? `${org.name} · 智能体配置、版本与生命周期管理` : '加载中…'}
           </p>
-        </div>
+        </div> */}
         {canManage ? (
           <button
             type="button"
