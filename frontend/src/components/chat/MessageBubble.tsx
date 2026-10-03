@@ -4,6 +4,7 @@
 import ReactMarkdown from 'react-markdown'
 import { useState } from 'react'
 
+import Icon from '@/components/Icon'
 import type { ChatRole, RAGSource } from '@/types'
 
 /** 工具调用视图：历史的 ToolCallRun（ok/error）与流式进行中（running）统一形态 */
@@ -57,18 +58,7 @@ export default function MessageBubble({
           </div>
         )}
         {streaming ? <span className="msg-cursor" /> : null}
-        {!isUser && !streaming && content ? (
-          <button
-            type="button"
-            className="mt-2 text-[11px] text-[var(--ink-3)] hover:text-[var(--accent)]"
-            onClick={() => {
-              void navigator.clipboard.writeText(content).then(() => {
-                setCopied(true)
-                window.setTimeout(() => setCopied(false), 1500)
-              })
-            }}
-          >{copied ? '已复制' : '复制回答'}</button>
-        ) : null}
+
         {showTools ? (
           <div className="tool-block">
             <p className="hd">工具调用</p>
@@ -127,6 +117,18 @@ export default function MessageBubble({
       </div>
       {showMeta ? (
         <div className="msg-meta">
+                  {!isUser && !streaming && content ? (
+          <button
+            type="button"
+            className="mr-2 text-[11px] text-[var(--ink-3)] msg-copy"
+            onClick={() => {
+              void navigator.clipboard.writeText(content).then(() => {
+                setCopied(true)
+                window.setTimeout(() => setCopied(false), 1500)
+              })
+            }}
+          >{copied ? <Icon name="check" className="ic"/> : <Icon name="copy" className="ic"/>}</button>
+        ) : null}
           {time != null ? <span className="meta-time">{time}</span> : null}
           {agentName != null ? <span className="meta-agent">· {agentName}</span> : null}
         </div>

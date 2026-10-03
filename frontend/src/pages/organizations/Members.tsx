@@ -154,7 +154,7 @@ export default function Members() {
             onClick={() => setShowAddForm((v) => !v)}
             className="btn primary"
           >
-            <Icon name={showAddForm ? 'x' : 'plus'} className="ic" />
+            <Icon name={showAddForm ? 'chevron-down' : 'plus'} className="ic" />
             {showAddForm ? '收起' : '添加成员'}
           </button>
         ) : null}

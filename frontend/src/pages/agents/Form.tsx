@@ -221,11 +221,21 @@ export default function AgentForm() {
     <div className="mx-auto max-w-5xl">
       <div className="page-head">
         <div>
-          <h1 className="page-title">{isEdit ? '编辑智能体' : '新建智能体'}</h1>
-          <p className="page-sub">
+                <button
+        type="button"
+        onClick={() =>
+          navigate(agentsPath(orgId))
+        }
+        className="btn ghost xs"
+      >
+        <Icon name="back" className="ic" />
+        返回
+      </button>
+          <h1 className="page-title mt-4">{isEdit ? '编辑智能体' : '新建智能体'}</h1>
+          {/* <p className="page-sub">
             {org.name}
             {isEdit && agent ? ` · ${agent.name}` : ''}
-          </p>
+          </p> */}
         </div>
       </div>
 

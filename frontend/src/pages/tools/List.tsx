@@ -40,12 +40,12 @@ export default function ToolList() {
   return (
     <div>
       <div className="page-head">
-        <div>
+        {/* <div>
           <h1 className="page-title">工具</h1>
           <p className="page-sub">
             {org ? `${org.name} · Agent 可调用的外部工具（计算器 / HTTP）` : '加载中…'}
           </p>
-        </div>
+        </div> */}
         {canManage ? (
           <button type="button" onClick={() => navigate(toolNewPath(orgId))} className="btn primary">
             <Icon name="plus" className="ic" />

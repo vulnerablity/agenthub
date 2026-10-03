@@ -16,9 +16,9 @@ interface SessionListProps {
   loadError: boolean
   onRetryLoad: () => void
   /** 回到欢迎态（未选中会话），在输入框内重新选择智能体 */
-  onNewChat: () => void
+  // onNewChat: () => void
   /** 收起侧边栏 */
-  onToggleSidebar: () => void
+  // onToggleSidebar: () => void
 }
 
 export default function SessionList({
@@ -32,12 +32,12 @@ export default function SessionList({
   isLoading,
   loadError,
   onRetryLoad,
-  onNewChat,
-  onToggleSidebar,
+  // onNewChat,
+  // onToggleSidebar,
 }: SessionListProps) {
   return (
     <div className="chat-side">
-      <div className="chat-side-head">
+      {/* <div className="chat-side-head">
         <button
           type="button"
           className="side-toggle"
@@ -47,16 +47,14 @@ export default function SessionList({
         >
           <Icon name="panel-left" className="ic" />
         </button>
-      </div>
+      </div> */}
       <div className="chat-side-func">
-              <button type="button" className="btn-new" onClick={onNewChat}>
-          <Icon name="plus" className="ic" />
-          新建对话
-        </button>
+      <div className="px-3 w-72 input">
+        <Icon name="search" className="ic" />
+        <input className="w-full" aria-label="搜索会话" placeholder="搜索会话标题…" value={search} onChange={(e) => onSearch(e.target.value)} onBlur={() => window.setTimeout(() => onSearch(''), 500)} />
       </div>
-      <div className="px-3 pb-2">
-        <input className="input w-full" aria-label="搜索会话" placeholder="搜索会话标题…" value={search} onChange={(e) => onSearch(e.target.value)} />
       </div>
+
       <div className="chat-side-body">
         {isLoading ? <p className="side-empty">正在加载会话…</p> : loadError ? (
           <div className="side-empty"><p>会话加载失败</p><button type="button" className="mt-2 underline" onClick={onRetryLoad}>重试</button></div>

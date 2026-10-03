@@ -48,12 +48,12 @@ export default function KnowledgeBaseList() {
   return (
     <div>
       <div className="page-head">
-        <div>
+        {/* <div>
           <h1 className="page-title">知识库</h1>
           <p className="page-sub">
             {org ? `${org.name} · 企业文档管理、向量化与 RAG 检索测试` : '加载中…'}
           </p>
-        </div>
+        </div> */}
         {canManage ? (
           <button
             type="button"

@@ -44,6 +44,8 @@ export type IconName =
   | 'cpu'
   | 'link'
   | 'loader'
+  | 'chevron-down'
+  | 'square-pen'
 
 const PATHS: Record<IconName, ReactNode> = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h5v-6h4v6h5V9.5" />,
@@ -81,6 +83,7 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M15 3v18" />
     </>
   ),
+  
   book: (
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15ZM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5" />
   ),
@@ -97,6 +100,7 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="m21 21-4.35-4.35" />
     </>
   ),
+  "chevron-down":<path d="m6 9 6 6 6-6"/>,
   trash: <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />,
   edit: <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   send: <path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" />,
@@ -144,6 +148,8 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   copy: (
     <>
+      {/* <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/> */}
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </>
@@ -174,6 +180,11 @@ const PATHS: Record<IconName, ReactNode> = {
   ),
   loader: (
     <path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.2 16.2l2.9 2.9M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.2 7.8l2.9-2.9" />
+  ),
+  'square-pen':(
+  <>
+  <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>
+  </>
   ),
 }
 

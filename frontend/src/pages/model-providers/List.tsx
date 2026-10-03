@@ -73,14 +73,14 @@ export default function ModelProviderList() {
   return (
     <div>
       <div className="page-head">
-        <div>
+        {/* <div>
           <h1 className="page-title">模型供应商</h1>
           <p className="page-sub">
             {org
               ? `${org.name} · 多供应商 LLM 接入（DeepSeek / 智谱 / 豆包 / Ollama 等），智能体版本按「供应商 + 模型」路由`
               : '加载中…'}
           </p>
-        </div>
+        </div> */}
         {canManage ? (
           <button
             type="button"
