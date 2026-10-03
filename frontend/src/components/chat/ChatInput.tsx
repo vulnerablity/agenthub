@@ -76,7 +76,7 @@ export default function ChatInput({
       {notice ? <p className="ci-notice">{notice}</p> : null}
       <form onSubmit={submit} className="ci-box">
         <button type="button" className="ci-plus" title="上传图片/文件/文件夹" onClick={handlePlus}>
-          <Icon name="plus" className="ic" />
+          <Icon name="add" className="ic" />
         </button>
         <textarea
           ref={textareaRef}

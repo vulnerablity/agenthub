@@ -1727,21 +1727,33 @@ table.tbl {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.session-del {
+.session-del,
+.session-rename {
   display: none;
   margin-top: 6px;
   border: 0;
   background: none;
   padding: 0;
   font-size: 11px;
-  color: #e8a0a0;
   cursor: pointer;
+    color: #6b7280;
 }
-.session-item:hover .session-del {
+.session-rename .ic{
+  width: 15px;
+  height: 15px;
+}
+.session-del .ic{
+  width: 15px;
+  height: 15px;
+}
+.session-item:hover .session-rename{
+  display: inline;
+}
+.session-item:hover .session-del{
   display: inline;
 }
 .session-del:hover {
-  color: var(--red);
+  /* color: var(--red); */
 }
 
 /* 消息区 */
@@ -2126,22 +2138,8 @@ table.tbl {
   color: var(--ink-1);
   font-weight: 600;
 }
-.session-del {
-  display: none;
-  flex-shrink: 0;
-  border: 0;
-  background: none;
-  padding: 0;
-  font-size: 11px;
-  color: #e5484d;
-  cursor: pointer;
-}
-.session-row:hover .session-del {
-  display: inline;
-}
-.session-del:hover {
-  color: #c8102e;
-}
+
+
 
 /* 对话面板头部：三栏（展开按钮 / 居中标题 / 占位） */
 .chat-head {
@@ -2218,7 +2216,7 @@ table.tbl {
   word-break: break-word;
 }
 .msg-meta {
-  margin-top: 5px;
+  margin-top: 20px;
   margin-left: 3px;
   display: flex;
   align-items: center;
@@ -2235,7 +2233,7 @@ table.tbl {
   border-radius: 4px;
 }
 .msg-copy:hover {
-  background: #bdbbbb5a;
+  background: #bdbbbb3c;
 }
 .msg-copy .ic {
   height: 15px;

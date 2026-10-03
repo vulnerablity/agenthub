@@ -80,14 +80,16 @@ export default function SessionList({
                     </span>
                     <button
                       type="button"
-                      className="session-del"
+                      className="session-rename"
                       aria-label="重命名会话"
                       onClick={(e) => {
                         e.stopPropagation()
                         const title = window.prompt('输入新的会话标题', conv.title)?.trim()
                         if (title) onRename(conv.id, title)
                       }}
-                    >重命名</button>
+                    >
+                      <Icon name="plus" className="ic"></Icon>
+                    </button>
                     <button
                       type="button"
                       className="session-del"
@@ -99,7 +101,7 @@ export default function SessionList({
                         }
                       }}
                     >
-                      删除
+                     <Icon name="trash" className="ic"></Icon>
                     </button>
                   </div>
                 </li>
