@@ -46,6 +46,7 @@ export type IconName =
   | 'loader'
   | 'chevron-down'
   | 'square-pen'
+  | 'add'
 
 const PATHS: Record<IconName, ReactNode> = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h5v-6h4v6h5V9.5" />,
@@ -106,6 +107,13 @@ const PATHS: Record<IconName, ReactNode> = {
   send: <path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" />,
   plus: <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+  add:(
+    <>
+      <path d="M5 12h14"/>
+      <path d="M12 5v14"/>
+    </>
+
+  ),
   check: <path d="M20 6 9 17l-5-5" />,
   'chev-down': <path d="m6 9 6 6 6-6" />,
   back: <path d="M19 12H5M12 19l-7-7 7-7" />,
