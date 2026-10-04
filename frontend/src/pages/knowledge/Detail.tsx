@@ -118,7 +118,7 @@ export default function KnowledgeBaseDetail() {
       </button>
 
       {/* KB 信息卡 */}
-      <div className="card card-pad mt-4 flex flex-wrap items-start justify-between gap-4">
+      {/* <div className="card card-pad mt-4 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <span className="avatar lg av-3">
             <Icon name="book" width={20} height={20} />
@@ -147,7 +147,7 @@ export default function KnowledgeBaseDetail() {
             编辑
           </button>
         ) : null}
-      </div>
+      </div> */}
 
       {apiError ? <p className="mt-4 text-[13px] text-red-500">{apiError}</p> : null}
 
