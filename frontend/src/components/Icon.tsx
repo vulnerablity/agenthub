@@ -47,6 +47,8 @@ export type IconName =
   | 'chevron-down'
   | 'square-pen'
   | 'add'
+  | 'chevron-right'
+  | 'circle-user'
 
 const PATHS: Record<IconName, ReactNode> = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h5v-6h4v6h5V9.5" />,
@@ -194,6 +196,17 @@ const PATHS: Record<IconName, ReactNode> = {
   <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>
   </>
   ),
+  'chevron-right': <path d="m9 18 6-6-6-6"/>,
+  'circle-user':(
+    <>
+      <circle cx="12" cy="12" r="10"/>
+  <circle cx="12" cy="10" r="3"/>
+  <path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/>
+    </>
+  )
+  
+
+  
 }
 
 interface IconProps extends SVGProps<SVGSVGElement> {
