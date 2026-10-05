@@ -313,7 +313,7 @@ a {
 
 .sb-foot {
   border-top: 1px solid rgba(255, 255, 255, 0.07);
-  padding: 12px;
+  padding: 0 10px 10px;
 }
 .sb-user {
   display: flex;
@@ -342,6 +342,7 @@ a {
   text-overflow: ellipsis;
   max-width: 120px;
 }
+
 .logout {
   margin-top: 8px;
   display: flex;
@@ -362,7 +363,64 @@ a {
   border-color: rgba(220, 38, 38, 0.35);
   color: #ff9d9d;
 }
+/* ========== 侧边栏底部用户弹出菜单 sb-user-popover ========== */
+.sb-foot {
+  position: relative;
+  /* 关键！给浮层做定位父容器 */
+}
 
+.sb-user-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right:0;
+  margin: 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-2);
+  z-index: 60;
+  overflow: hidden;
+}
+
+.sb-user-popover__group {
+  padding: 6px;
+}
+
+.sb-user-popover__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: background 0.14s;
+}
+
+.sb-user-popover__item:hover {
+  background: #0000000d;
+}
+
+.sb-user-popover__item .ic {
+  width: 16px;
+  height: 16px;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+
+.sb-user-popover__arrow {
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.sb-user-popover__divider {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 6px;
+}
 /* ================= 页头 ================= */
 .page-head {
   display: flex;

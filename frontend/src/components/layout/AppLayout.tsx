@@ -1,5 +1,6 @@
 // components/layout/AppLayout.tsx
 // 受保护区域布局：左侧深色侧边栏（品牌 + 组织切换 + 分组导航 + 用户）+ 右侧内容区 Outlet
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import Icon from '@/components/Icon'
@@ -58,6 +59,19 @@ export default function AppLayout() {
   const canManageOrganization = currentOrg?.my_role === 'owner' || currentOrg?.my_role === 'admin'
   const canSeeExecutions = canChatAgent(currentOrg?.my_role)
 
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const handleOpenUserMenu = (e:React.MouseEvent) => {
+  e.stopPropagation();
+  setShowUserMenu(v => !v);
+};
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      e.stopPropagation();
+      setShowUserMenu(false);
+    };
+    if (showUserMenu) document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [showUserMenu]);
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -167,7 +181,7 @@ export default function AppLayout() {
         </nav>
 
         <div className="sb-foot">
-          <div className="sb-user">
+          <div className="sb-user" onClick={handleOpenUserMenu}>
             <span className={`avatar md user-av user-avatar`}>
               {(me?.username ?? '?').slice(0, 1).toUpperCase()}
             </span>
@@ -176,11 +190,38 @@ export default function AppLayout() {
               <p className="ue">{me?.email}</p>
             </span>
           </div>
-          <button type="button" onClick={handleLogout} className="logout">
-            <Icon name="logout" width={13} height={13} />
-            退出登录
-          </button>
+        {showUserMenu && (
+          <div className="sb-user-popover">
+            {/* 分组1 */}
+            <div className="sb-user-popover__group">
+              <div className="sb-user-popover__item">
+                <Icon name="circle-user" className="ic" />
+                <span>个人资料</span>
+                <Icon name="chevron-right" className="ic sb-user-popover__arrow" />
+              </div>
+              <div className="sb-user-popover__item">
+                <Icon name="settings" width={16} height={16} />
+                <span>设置</span>
+                <span className="sb-user-popover__arrow"></span>
+              </div>
+            </div>
+
+            {/* 分割横线 */}
+            <div className="sb-user-popover__divider"></div>
+
+            {/* 分组2 */}
+            <div className="sb-user-popover__group">
+              <div className="sb-user-popover__item" onClick={handleLogout}>
+                <Icon name="logout" className="ic" />
+                <span>退出登录</span>
+                {/* 无箭头，不渲染箭头span */}
+              </div>
+            </div>
+          </div>)}
+     
         </div>
+
+
       </aside>
 
       <main className="content">
